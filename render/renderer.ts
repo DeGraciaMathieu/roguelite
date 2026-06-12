@@ -527,6 +527,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       visionMaskGraphics.clear();
       visionMaskGraphics.poly(visionPolygon(eye, player.aim)).fill(0xffffff);
 
+      const equipped = renderState.inventory.weapons[renderState.inventory.equippedIndex];
       playerGraphics.clear();
       drawPlayerShape(
         playerGraphics,
@@ -535,15 +536,15 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         player.radius,
         player.aim,
         COLOR_PLAYER_BY_HEALTH[healthState(player.health)],
+        equipped ? getWeaponDef(equipped.defId).ammo : 'handgun',
       );
 
       // Barre de progression de recharge au-dessus de la tête, le temps de la recharge.
-      const weapon = renderState.inventory.weapons[renderState.inventory.equippedIndex];
-      if (weapon && weapon.reloadingUntilMs !== null) {
-        const reloadMs = getWeaponDef(weapon.defId).reloadMs * reloadDurationMultiplier(renderState);
+      if (equipped && equipped.reloadingUntilMs !== null) {
+        const reloadMs = getWeaponDef(equipped.defId).reloadMs * reloadDurationMultiplier(renderState);
         const progress = Math.min(
           1,
-          Math.max(0, 1 - (weapon.reloadingUntilMs - renderState.elapsedMs) / reloadMs),
+          Math.max(0, 1 - (equipped.reloadingUntilMs - renderState.elapsedMs) / reloadMs),
         );
         const barX = x - RELOAD_BAR_WIDTH / 2;
         const barY = y - player.radius - RELOAD_BAR_OFFSET;
