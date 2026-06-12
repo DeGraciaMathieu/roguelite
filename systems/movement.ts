@@ -8,6 +8,7 @@ import type { Room, RunState } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
 import { DASH_COOLDOWN_MS, DASH_DURATION_MS, DASH_SPEED, PLAYER_MOVE_SPEED } from '@/data/balance';
 import { moveCircle, wallRects } from './collision';
+import { moveSpeedMultiplier } from './relics';
 
 export function currentRoom(state: RunState): Room {
   const room = state.floor.rooms[state.floor.currentRoomId];
@@ -38,8 +39,10 @@ export function updateMovement(state: RunState, intent: PlayerIntent, dtMs: numb
   const dashing = dash.remainingMs > 0;
   if (dashing) dash.remainingMs = Math.max(0, dash.remainingMs - dtMs);
 
-  player.vel.x = (dashing ? dash.dir.x : intent.move.x) * (dashing ? DASH_SPEED : PLAYER_MOVE_SPEED);
-  player.vel.y = (dashing ? dash.dir.y : intent.move.y) * (dashing ? DASH_SPEED : PLAYER_MOVE_SPEED);
+  // Les reliques boostent la course ; le dash, lui, reste fixe (engagement bref).
+  const runSpeed = PLAYER_MOVE_SPEED * moveSpeedMultiplier(state);
+  player.vel.x = (dashing ? dash.dir.x : intent.move.x) * (dashing ? DASH_SPEED : runSpeed);
+  player.vel.y = (dashing ? dash.dir.y : intent.move.y) * (dashing ? DASH_SPEED : runSpeed);
 
   const room = currentRoom(state);
   // Les fosses bloquent le corps comme les obstacles (mais pas les tirs).

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { asId } from '@/domain';
 import type { Enemy, RunState, WeaponInstance } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
 import { createDebugRun } from '@/data/debugRoom';
@@ -106,6 +107,27 @@ describe('updateCombat', () => {
     state.elapsedMs += def.reloadMs - 1;
     updateCombat(state, intent({ fire: true }));
     expect(state.projectiles).toHaveLength(1); // uniquement le tir initial
+  });
+
+  it('une relique de dégâts multiplie les dégâts des projectiles', () => {
+    const state = createDebugRun(1);
+    const def = getWeaponDef(equipped(state).defId);
+    state.relics = [{ defId: asId<'RelicDefId'>('crocs-sertis') }]; // damageMult 1.25
+
+    updateCombat(state, intent({ fire: true }));
+
+    expect(state.projectiles[0]?.damage).toBeCloseTo(def.damage * 1.25);
+  });
+
+  it('une relique de recharge raccourcit la durée de recharge', () => {
+    const state = createDebugRun(1);
+    const def = getWeaponDef(equipped(state).defId);
+    state.relics = [{ defId: asId<'RelicDefId'>('mains-lestes') }]; // reloadSpeedMult 0.7
+    equipped(state).ammoInMag = 0;
+
+    updateCombat(state, intent({ fire: true })); // recharge auto
+
+    expect(equipped(state).reloadingUntilMs).toBeCloseTo(def.reloadMs * 0.7);
   });
 
   it('est déterministe : même seed, même dispersion de tir', () => {

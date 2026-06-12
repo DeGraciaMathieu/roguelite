@@ -11,6 +11,7 @@ import { PROJECTILE_SPEED, PROJECTILE_TTL_MS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
 import { pointInRect, wallRects } from './collision';
 import { currentRoom } from './movement';
+import { damageMultiplier, reloadDurationMultiplier } from './relics';
 import { allocEntityId } from './spawn';
 
 /** Distance bouche du canon : le projectile naît hors du cercle du joueur. */
@@ -22,6 +23,7 @@ function equippedWeapon(state: RunState): WeaponInstance | null {
 
 function spawnProjectiles(state: RunState, def: WeaponDef): void {
   const player = state.player;
+  const damage = def.damage * damageMultiplier(state);
   for (let i = 0; i < def.pellets; i += 1) {
     // Dispersion symétrique autour de la visée, tirée du RNG de la run
     // pour préserver le déterminisme seedé.
@@ -33,7 +35,7 @@ function spawnProjectiles(state: RunState, def: WeaponDef): void {
       id: allocEntityId(state),
       pos: { x: player.pos.x + dirX * muzzle, y: player.pos.y + dirY * muzzle },
       vel: { x: dirX * PROJECTILE_SPEED, y: dirY * PROJECTILE_SPEED },
-      damage: def.damage,
+      damage,
       ammo: def.ammo,
       ownerId: 'player',
       ttlMs: PROJECTILE_TTL_MS,
@@ -64,7 +66,7 @@ export function updateCombat(state: RunState, intent: PlayerIntent): void {
     weapon.ammoInMag < def.magazineSize &&
     state.inventory.ammo[def.ammo] > 0
   ) {
-    weapon.reloadingUntilMs = now + def.reloadMs;
+    weapon.reloadingUntilMs = now + def.reloadMs * reloadDurationMultiplier(state);
   }
 
   if (
