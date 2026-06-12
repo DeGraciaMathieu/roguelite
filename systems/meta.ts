@@ -6,6 +6,7 @@
 
 import type { MetaState, RunStats, RunStatus, WeaponDefId } from '@/domain';
 import {
+  CURRENCY_FLOOR_DEPTH_BONUS,
   CURRENCY_PER_FLOOR,
   CURRENCY_PER_KILL,
   EXTRACTION_BONUS_MULTIPLIER,
@@ -14,8 +15,17 @@ import { UNLOCK_DEFS } from '@/data/unlocks';
 import type { UnlockDef } from '@/data/unlocks';
 import { HANDGUN_ID } from '@/data/weapons';
 
+/**
+ * Le n-ième étage descendu (0-based) rapporte base + n × bonus : somme
+ * arithmétique, l'étage 5 paie plus que l'étage 1.
+ */
+function floorsClearedReward(floorsCleared: number): number {
+  const depthBonus = (CURRENCY_FLOOR_DEPTH_BONUS * floorsCleared * (floorsCleared - 1)) / 2;
+  return floorsCleared * CURRENCY_PER_FLOOR + depthBonus;
+}
+
 export function runCurrencyReward(stats: RunStats, status: RunStatus): number {
-  const base = stats.kills * CURRENCY_PER_KILL + stats.floorsCleared * CURRENCY_PER_FLOOR;
+  const base = stats.kills * CURRENCY_PER_KILL + floorsClearedReward(stats.floorsCleared);
   return Math.floor(status === 'extracted' ? base * EXTRACTION_BONUS_MULTIPLIER : base);
 }
 

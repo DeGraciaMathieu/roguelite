@@ -51,5 +51,7 @@ export const EXTRACTION_MIN_FLOOR = 1;
 
 export const CURRENCY_PER_KILL = 5;
 export const CURRENCY_PER_FLOOR = 25;
+/** Chaque étage descendu rapporte ça de plus que le précédent : le risque de la profondeur paie. */
+export const CURRENCY_FLOOR_DEPTH_BONUS = 10;
 /** S'extraire vivant rapporte plus que mourir au même point de la descente. */
 export const EXTRACTION_BONUS_MULTIPLIER = 1.5;

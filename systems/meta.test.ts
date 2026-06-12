@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultMeta } from '@/domain';
 import type { RunStats } from '@/domain';
 import {
+  CURRENCY_FLOOR_DEPTH_BONUS,
   CURRENCY_PER_FLOOR,
   CURRENCY_PER_KILL,
   EXTRACTION_BONUS_MULTIPLIER,
@@ -24,13 +25,22 @@ function stats(overrides: Partial<RunStats> = {}): RunStats {
 }
 
 describe('runCurrencyReward', () => {
+  // Étages 0 et 1 descendus : base ×2 + bonus de profondeur du second étage.
+  const FLOORS_REWARD = 2 * CURRENCY_PER_FLOOR + CURRENCY_FLOOR_DEPTH_BONUS;
+
   it('calcule la récompense de base à la mort', () => {
-    expect(runCurrencyReward(stats(), 'dead')).toBe(8 * CURRENCY_PER_KILL + 2 * CURRENCY_PER_FLOOR);
+    expect(runCurrencyReward(stats(), 'dead')).toBe(8 * CURRENCY_PER_KILL + FLOORS_REWARD);
   });
 
   it('applique le bonus d’extraction', () => {
-    const base = 8 * CURRENCY_PER_KILL + 2 * CURRENCY_PER_FLOOR;
+    const base = 8 * CURRENCY_PER_KILL + FLOORS_REWARD;
     expect(runCurrencyReward(stats(), 'extracted')).toBe(Math.floor(base * EXTRACTION_BONUS_MULTIPLIER));
+  });
+
+  it('récompense progressive : un étage profond rapporte plus qu’un étage tôt', () => {
+    const reward = (floorsCleared: number) =>
+      runCurrencyReward(stats({ kills: 0, floorsCleared }), 'dead');
+    expect(reward(5) - reward(4)).toBeGreaterThan(reward(2) - reward(1));
   });
 });
 
