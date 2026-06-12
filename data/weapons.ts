@@ -1,0 +1,50 @@
+/**
+ * Catalogue statique des armes. Données, pas de logique de jeu.
+ */
+
+import { asId } from '@/domain';
+import type { WeaponDef, WeaponDefId, WeaponInstance } from '@/domain';
+
+export const HANDGUN_ID: WeaponDefId = asId<'WeaponDefId'>('handgun');
+export const SHOTGUN_ID: WeaponDefId = asId<'WeaponDefId'>('shotgun');
+
+export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
+  [HANDGUN_ID]: {
+    id: HANDGUN_ID,
+    name: 'Handgun',
+    ammo: 'handgun',
+    damage: 10,
+    magazineSize: 12,
+    reloadMs: 1200,
+    fireRateMs: 250,
+    pellets: 1,
+    spread: 0.03,
+  },
+  [SHOTGUN_ID]: {
+    id: SHOTGUN_ID,
+    name: 'Shotgun',
+    ammo: 'shotgun',
+    damage: 6,
+    magazineSize: 6,
+    reloadMs: 2000,
+    fireRateMs: 900,
+    pellets: 6,
+    spread: 0.35,
+  },
+};
+
+export function getWeaponDef(id: WeaponDefId): WeaponDef {
+  const def = WEAPON_DEFS[id];
+  if (!def) throw new Error(`WeaponDef inconnue : ${id}`);
+  return def;
+}
+
+/** Instance neuve d'une arme (chargeur plein, prête à tirer). */
+export function createWeaponInstance(id: WeaponDefId): WeaponInstance {
+  return {
+    defId: id,
+    ammoInMag: getWeaponDef(id).magazineSize,
+    reloadingUntilMs: null,
+    nextShotAtMs: 0,
+  };
+}
