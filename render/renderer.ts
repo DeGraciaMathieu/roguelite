@@ -19,6 +19,7 @@ import {
   createEffectPool,
   effectProgress,
   spawnDashGhost,
+  spawnEffect,
   spawnDeathRing,
   spawnImpactSparks,
   tickEffects,
@@ -87,6 +88,9 @@ const RECOIL_PX_SINGLE = 1;
 const RECOIL_PX_MULTI = 2;
 /** Cadence de ponte des fantômes de dash (~3 sur un dash de 150 ms). */
 const DASH_GHOST_INTERVAL_MS = 50;
+/** Gouttes de sang pendant un saignement. */
+const BLOOD_DRIP_INTERVAL_MS = 350;
+const COLOR_BLOOD = 0xe5533d;
 
 const RELOAD_BAR_WIDTH = 28;
 const RELOAD_BAR_HEIGHT = 4;
@@ -249,6 +253,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   let prevAmmoInMag = -1;
   let playerFlashUntil = 0;
   let lastGhostAt = 0;
+  let lastDripAt = 0;
   let recoilPx = 0;
   let floorKey = `${state.floor.seed}:${state.floor.index}`;
   let lastFrameAt = performance.now();
@@ -337,6 +342,24 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       }
       prevWeaponKey = key;
       prevAmmoInMag = weapon.ammoInMag;
+    }
+
+    // Saignement → gouttes laissées derrière le joueur (lien PRD 04).
+    if (
+      renderState.player.status.some((status) => status.kind === 'bleed') &&
+      now - lastDripAt >= BLOOD_DRIP_INTERVAL_MS
+    ) {
+      spawnEffect(effectPool, {
+        kind: 'spark',
+        x: renderState.player.pos.x,
+        y: renderState.player.pos.y + renderState.player.radius / 2,
+        vx: 0,
+        vy: 26,
+        radius: 2.5,
+        color: COLOR_BLOOD,
+        durationMs: 450,
+      });
+      lastDripAt = now;
     }
 
     // Dash en cours → fantômes du cercle joueur, cadence bornée.

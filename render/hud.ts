@@ -7,8 +7,10 @@
 import { healthState } from '@/domain';
 import type { HealthState, RunState } from '@/domain';
 import { DASH_COOLDOWN_MS } from '@/data/balance';
+import { getConsumableDef } from '@/data/consumables';
 import { getRelicDef } from '@/data/relics';
 import { getWeaponDef } from '@/data/weapons';
+import { isBleeding } from '@/systems/status';
 import {
   ammoDropMultiplier,
   damageMultiplier,
@@ -81,6 +83,7 @@ export function createHud(): Hud {
 
   let lastHealthWidth = '';
   let lastHealthColor = '';
+  let lastBleeding = false;
   let lastDashWidth = '';
   let lastDashColor = '';
   let lastAmmoText = '';
@@ -125,6 +128,13 @@ export function createHud(): Hud {
         lastHealthColor = healthColor;
       }
 
+      // Saignement : liseré rouge sur la barre de vie, le temps du statut.
+      const bleeding = isBleeding(state.player);
+      if (bleeding !== lastBleeding) {
+        healthOutline.style.borderColor = bleeding ? COLOR_EMPTY : '#8a939e';
+        lastBleeding = bleeding;
+      }
+
       const dashRatio = 1 - Math.min(1, state.player.dash.cooldownMs / DASH_COOLDOWN_MS);
       const dashWidth = `${Math.round(dashRatio * 100)}%`;
       const dashColor = dashRatio >= 1 ? COLOR_DASH_READY : COLOR_DASH_CHARGING;
@@ -164,8 +174,10 @@ export function createHud(): Hud {
         ammoLabel.style.display = 'none';
       }
 
-      const medkits = state.inventory.consumables.reduce((sum, stack) => sum + stack.count, 0);
-      const consumableText = medkits > 0 ? `MEDIKIT ×${medkits} (H)` : '';
+      const stacks = state.inventory.consumables
+        .map((stack) => `${getConsumableDef(stack.defId).name.toUpperCase()} ×${stack.count}`)
+        .join('  ');
+      const consumableText = stacks === '' ? '' : `${stacks} (H)`;
       if (consumableText !== lastConsumableText) {
         consumableLabel.textContent = consumableText;
         consumableLabel.style.display = consumableText === '' ? 'none' : 'block';
