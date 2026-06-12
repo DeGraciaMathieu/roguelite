@@ -25,6 +25,7 @@ import {
 } from './effects';
 import { drawMinimap } from './minimap';
 import { drawEnemyHealthBar, drawPlayerShape } from './shapes';
+import { isVisible, visionPolygon } from './visibility';
 import {
   SPRITE_FRAME_SIZE,
   SPRITE_ROTATION_OFFSET,
@@ -68,6 +69,10 @@ const LOOT_DRAW_W = 12;
 const LOOT_DRAW_H = 8;
 
 const DOOR_DRAW_WIDTH = 64;
+
+/** Voile de vision limitée : obscurité partielle, le décor reste deviné. */
+const COLOR_VEIL = 0x050608;
+const VEIL_ALPHA = 0.8;
 
 /** Teinte multiplicative du flash d'impact (un sprite ne peut pas « blanchir »). */
 const ENEMY_FLASH_TINT = 0xff6b6b;
@@ -187,6 +192,17 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   // Effets éphémères : au-dessus des ennemis, sous le joueur et ses tirs.
   const effectsGraphics = new Graphics();
   world.addChild(effectsGraphics);
+
+  // Vision limitée : voile au-dessus du décor et des entités mais sous les
+  // projectiles et le joueur (on tire dans le noir). La zone vue est un
+  // masque inversé : le voile n'est rendu qu'à l'extérieur de la forme.
+  // (Pas de Graphics.cut() : sa triangulation est peu fiable sur les
+  // polygones concaves comme notre trou de serrure.)
+  const veilGraphics = new Graphics();
+  world.addChild(veilGraphics);
+  const visionMaskGraphics = new Graphics();
+  world.addChild(visionMaskGraphics);
+  veilGraphics.setMask({ mask: visionMaskGraphics, inverse: true });
 
   const projectileGraphics = new Graphics();
   world.addChild(projectileGraphics);
@@ -421,8 +437,16 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         drawEffects(now);
       }
 
+      const player = renderState.player;
+      const x = prevPlayerPos.x + (player.pos.x - prevPlayerPos.x) * alpha;
+      const y = prevPlayerPos.y + (player.pos.y - prevPlayerPos.y) * alpha;
+      /** Œil du joueur (position rendue) : centre du voile et des raycasts de visibilité. */
+      const eye: Vec2 = { x, y };
+
       lootGraphics.clear();
       for (const spawn of room.lootSpawns) {
+        // Le loot ne se révèle qu'à portée de vue (halo/cône + ligne dégagée).
+        if (!isVisible(eye, player.aim, spawn.at, room.obstacles)) continue;
         if (spawn.kind === 'ammo') {
           lootGraphics
             .rect(spawn.at.x - LOOT_DRAW_W / 2, spawn.at.y - LOOT_DRAW_H / 2, LOOT_DRAW_W, LOOT_DRAW_H)
@@ -450,13 +474,20 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         if (!inRoomBounds(room, enemy.pos.x, enemy.pos.y)) {
           continue;
         }
+        // Invisible (trop loin ou derrière un obstacle) : pas dessiné, mais la
+        // simulation continue — l'IA vit sa vie dans le noir.
         let sprite = enemySprites.get(enemy.id);
+        if (!isVisible(eye, player.aim, enemy.pos, room.obstacles)) {
+          if (sprite) sprite.visible = false;
+          continue;
+        }
         if (!sprite) {
           sprite = new Sprite(enemyTextures[enemy.kind]);
           sprite.anchor.set(0.5);
           enemyLayer.addChild(sprite);
           enemySprites.set(enemy.id, sprite);
         }
+        sprite.visible = true;
         const scale = (enemy.radius * 2 * SPRITE_VISUAL_SCALE) / SPRITE_FRAME_SIZE;
         sprite.position.set(enemy.pos.x, enemy.pos.y);
         // Le museau suit le facing (sprites top-down symétriques, pas de flip).
@@ -488,9 +519,13 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         }
       }
 
-      const player = renderState.player;
-      const x = prevPlayerPos.x + (player.pos.x - prevPlayerPos.x) * alpha;
-      const y = prevPlayerPos.y + (player.pos.y - prevPlayerPos.y) * alpha;
+      // Voile d'obscurité ; la zone vue (halo + cône) est portée par le masque inversé.
+      veilGraphics.clear();
+      veilGraphics
+        .rect(room.bounds.x, room.bounds.y, room.bounds.w, room.bounds.h)
+        .fill({ color: COLOR_VEIL, alpha: VEIL_ALPHA });
+      visionMaskGraphics.clear();
+      visionMaskGraphics.poly(visionPolygon(eye, player.aim)).fill(0xffffff);
 
       playerGraphics.clear();
       drawPlayerShape(
