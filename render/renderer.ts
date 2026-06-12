@@ -39,6 +39,8 @@ const COLOR_OBSTACLE = 0x2c313a;
 const COLOR_PIT = 0x050608;
 const COLOR_PIT_EDGE = 0x23262c;
 const COLOR_DOOR = 0x7a9e63;
+const COLOR_DOOR_LOCKED = 0x8a3030;
+const COLOR_KEY = 0xc9a44a;
 const COLOR_STAIRS = 0x5d7fa3;
 const COLOR_EXTRACTION = 0xc9a44a;
 const COLOR_PROJECTILE = 0xf0c33c;
@@ -116,13 +118,14 @@ function roomDoors(state: RunState, room: Room): Door[] {
 
 function drawDoor(graphics: Graphics, door: Door, room: Room): void {
   const b = room.bounds;
+  const color = door.locked ? COLOR_DOOR_LOCKED : COLOR_DOOR;
   const onVerticalWall = Math.abs(door.at.x - b.x) < 1 || Math.abs(door.at.x - (b.x + b.w)) < 1;
   if (onVerticalWall) {
     const x = Math.abs(door.at.x - b.x) < 1 ? b.x : b.x + b.w - WALL_THICKNESS;
-    graphics.rect(x, door.at.y - DOOR_DRAW_WIDTH / 2, WALL_THICKNESS, DOOR_DRAW_WIDTH).fill(COLOR_DOOR);
+    graphics.rect(x, door.at.y - DOOR_DRAW_WIDTH / 2, WALL_THICKNESS, DOOR_DRAW_WIDTH).fill(color);
   } else {
     const y = Math.abs(door.at.y - b.y) < 1 ? b.y : b.y + b.h - WALL_THICKNESS;
-    graphics.rect(door.at.x - DOOR_DRAW_WIDTH / 2, y, DOOR_DRAW_WIDTH, WALL_THICKNESS).fill(COLOR_DOOR);
+    graphics.rect(door.at.x - DOOR_DRAW_WIDTH / 2, y, DOOR_DRAW_WIDTH, WALL_THICKNESS).fill(color);
   }
 }
 
@@ -466,6 +469,10 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
               { x: spawn.at.x - 7, y: spawn.at.y },
             ])
             .fill(COLOR_RELIC);
+        } else if (spawn.kind === 'key') {
+          // Clé : petit « L » doré.
+          lootGraphics.rect(spawn.at.x - 6, spawn.at.y - 7, 4, 14).fill(COLOR_KEY);
+          lootGraphics.rect(spawn.at.x - 2, spawn.at.y + 3, 8, 4).fill(COLOR_KEY);
         }
       }
 
