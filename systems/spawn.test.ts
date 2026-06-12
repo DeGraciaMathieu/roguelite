@@ -55,6 +55,24 @@ describe('spawnRoomContent', () => {
     expect(Object.keys(a.state.enemies)).toEqual(Object.keys(b.state.enemies));
   });
 
+  it('matérialise un théropode avec les stats de son archétype', () => {
+    const { state, room } = runWithCombatRoom();
+    room.enemySpawns = [
+      { kind: 'theropode', at: { x: room.bounds.x + 150, y: room.bounds.y + 150 } },
+    ];
+
+    spawnRoomContent(state, room);
+
+    const enemies = Object.values(state.enemies);
+    expect(enemies).toHaveLength(1);
+    const theropode = enemies[0]!;
+    const archetype = ENEMY_ARCHETYPES.theropode;
+    expect(theropode.kind).toBe('theropode');
+    expect(theropode.health).toEqual({ current: archetype.maxHealth, max: archetype.maxHealth });
+    expect(theropode.radius).toBe(archetype.radius);
+    expect(theropode.ai.phase).toBe('idle');
+  });
+
   it('les raptors d’une même salle forment une seule meute', () => {
     const { state, room } = runWithCombatRoom();
     room.enemySpawns = [

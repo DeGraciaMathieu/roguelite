@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Floor, RoomId } from '@/domain';
+import type { EnemyKind, Floor, RoomId } from '@/domain';
 import { DEFAULT_FLOOR_GEN } from '@/data/floorgen';
 import { circleIntersectsRect } from './collision';
 import { generateFloor } from './floorgen';
 
 const SEEDS = [1, 42, 1337, 0xdeadbeef];
+
+/** Échantillon plus large pour les tests statistiques (mix, densité). */
+const MANY_SEEDS = Array.from({ length: 25 }, (_, i) => i + 1);
 
 /** Parcours BFS de salle en salle via les portes. */
 function reachableRooms(floor: Floor): Set<RoomId> {
@@ -48,6 +51,101 @@ describe('generateFloor — déterminisme', () => {
 
   it('produit des étages différents pour des seeds différentes', () => {
     expect(JSON.stringify(generateFloor(1))).not.toBe(JSON.stringify(generateFloor(2)));
+  });
+});
+
+describe('generateFloor — scaling de difficulté', () => {
+  function countByKind(floor: Floor, kind: EnemyKind): number {
+    return Object.values(floor.rooms)
+      .flatMap((room) => room.enemySpawns)
+      .filter((spawn) => spawn.kind === kind).length;
+  }
+
+  /** Densité moyenne d'ennemis par salle de combat, agrégée sur MANY_SEEDS. */
+  function averageDensity(floorIndex: number): number {
+    let enemies = 0;
+    let combatRooms = 0;
+    for (const seed of MANY_SEEDS) {
+      const floor = generateFloor(seed, floorIndex);
+      for (const room of Object.values(floor.rooms)) {
+        if (room.kind !== 'combat') continue;
+        combatRooms += 1;
+        enemies += room.enemySpawns.length;
+      }
+    }
+    return enemies / combatRooms;
+  }
+
+  it('même seed + même index → même étage, mix d’ennemis compris', () => {
+    for (const seed of SEEDS) {
+      expect(generateFloor(seed, 4)).toEqual(generateFloor(seed, 4));
+    }
+  });
+
+  it('aucun théropode avant l’étage minimal', () => {
+    for (const seed of MANY_SEEDS) {
+      for (let index = 0; index < DEFAULT_FLOOR_GEN.theropode.minFloor; index += 1) {
+        expect(countByKind(generateFloor(seed, index), 'theropode')).toBe(0);
+      }
+    }
+  });
+
+  it('le théropode apparaît à l’étage 4', () => {
+    const found = MANY_SEEDS.some((seed) => countByKind(generateFloor(seed, 4), 'theropode') > 0);
+    expect(found).toBe(true);
+  });
+
+  it('jamais plus du plafond de théropodes par étage', () => {
+    for (const seed of MANY_SEEDS) {
+      for (let index = 0; index <= 8; index += 1) {
+        expect(countByKind(generateFloor(seed, index), 'theropode')).toBeLessThanOrEqual(
+          DEFAULT_FLOOR_GEN.theropode.maxPerFloor,
+        );
+      }
+    }
+  });
+
+  it('étages 0-1 : compys majoritaires, étages 2-3 : raptors majoritaires', () => {
+    for (const index of [0, 1]) {
+      let compys = 0;
+      let raptors = 0;
+      for (const seed of MANY_SEEDS) {
+        const floor = generateFloor(seed, index);
+        compys += countByKind(floor, 'compy');
+        raptors += countByKind(floor, 'raptor');
+      }
+      expect(compys).toBeGreaterThan(raptors);
+    }
+    for (const index of [2, 3]) {
+      let compys = 0;
+      let raptors = 0;
+      for (const seed of MANY_SEEDS) {
+        const floor = generateFloor(seed, index);
+        compys += countByKind(floor, 'compy');
+        raptors += countByKind(floor, 'raptor');
+      }
+      expect(raptors).toBeGreaterThan(compys);
+    }
+  });
+
+  it('la densité moyenne croît strictement entre l’étage 0 et l’étage 4', () => {
+    const shallow = averageDensity(0);
+    const mid = averageDensity(2);
+    const deep = averageDensity(4);
+    expect(shallow).toBeLessThan(mid);
+    expect(mid).toBeLessThan(deep);
+  });
+
+  it('la densité reste plafonnée même très profond (théropode en sus)', () => {
+    for (const seed of SEEDS) {
+      const floor = generateFloor(seed, 20);
+      for (const room of Object.values(floor.rooms)) {
+        if (room.kind !== 'combat') continue;
+        expect(room.enemySpawns.length).toBeLessThanOrEqual(
+          DEFAULT_FLOOR_GEN.maxEnemiesPerCombatRoom + DEFAULT_FLOOR_GEN.theropode.maxPerFloor,
+        );
+      }
+    }
   });
 });
 

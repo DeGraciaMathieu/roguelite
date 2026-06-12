@@ -406,24 +406,7 @@ function generatePits(
   return pits;
 }
 
-function generateEnemySpawns(
-  rng: RngState,
-  bounds: Rect,
-  config: FloorGenConfig,
-  blocked: readonly Rect[],
-): EnemySpawn[] {
-  const count = nextInt(rng, config.enemiesPerCombatRoom.min, config.enemiesPerCombatRoom.max);
-  const spawns: EnemySpawn[] = [];
-  for (let n = 0; n < count; n += 1) {
-    spawns.push({
-      kind: pick(rng, ['raptor', 'compy'] as const),
-      at: randomClearPoint(rng, bounds, blocked),
-    });
-  }
-  return spawns;
-}
-
-function pickWeightedAmmo(rng: RngState, entries: FloorGenConfig['ammoLoot']) {
+function pickWeighted<T extends { weight: number }>(rng: RngState, entries: readonly T[]): T {
   const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = nextFloat(rng) * total;
   for (const entry of entries) {
@@ -431,8 +414,43 @@ function pickWeightedAmmo(rng: RngState, entries: FloorGenConfig['ammoLoot']) {
     if (roll < 0) return entry;
   }
   const last = entries[entries.length - 1];
-  if (!last) throw new Error('Table ammoLoot vide');
+  if (!last) throw new Error('Table pondérée vide');
   return last;
+}
+
+/** Mix d'espèces du palier le plus profond atteint (table triée par minFloor croissant). */
+function enemyMixForDepth(config: FloorGenConfig, floorIndex: number) {
+  let current;
+  for (const tier of config.enemyMixByDepth) {
+    if (floorIndex >= tier.minFloor) current = tier;
+  }
+  if (!current) throw new Error('Table enemyMixByDepth vide ou sans palier pour cet étage');
+  return current.mix;
+}
+
+function generateEnemySpawns(
+  rng: RngState,
+  bounds: Rect,
+  config: FloorGenConfig,
+  blocked: readonly Rect[],
+  floorIndex: number,
+  withTheropode: boolean,
+): EnemySpawn[] {
+  // Densité croissante avec la profondeur, plafonnée : la salle reste lisible.
+  const depthBonus = Math.floor(floorIndex / config.extraEnemyEveryNFloors);
+  const min = Math.min(config.enemiesPerCombatRoom.min + depthBonus, config.maxEnemiesPerCombatRoom);
+  const max = Math.min(config.enemiesPerCombatRoom.max + depthBonus, config.maxEnemiesPerCombatRoom);
+  const count = nextInt(rng, min, max);
+  const mix = enemyMixForDepth(config, floorIndex);
+  const spawns: EnemySpawn[] = [];
+  // Le théropode s'ajoute au mix standard : un mini-boss, pas un remplacement.
+  if (withTheropode) {
+    spawns.push({ kind: 'theropode', at: randomClearPoint(rng, bounds, blocked) });
+  }
+  for (let n = 0; n < count; n += 1) {
+    spawns.push({ kind: pickWeighted(rng, mix).kind, at: randomClearPoint(rng, bounds, blocked) });
+  }
+  return spawns;
 }
 
 function generateRoomLoot(
@@ -446,7 +464,7 @@ function generateRoomLoot(
   if (kind === 'loot') {
     const count = nextInt(rng, 1, 2);
     for (let n = 0; n < count; n += 1) {
-      const entry = pickWeightedAmmo(rng, config.ammoLoot);
+      const entry = pickWeighted(rng, config.ammoLoot);
       spawns.push({
         kind: 'ammo',
         at: randomClearPoint(rng, bounds, blocked),
@@ -520,6 +538,9 @@ export function generateFloor(
   const exitIndex = depths.indexOf(Math.max(...depths));
   const kinds = assignKinds(rng, adjacency, exitIndex);
 
+  // Budget théropode de l'étage : tiré salle par salle, dans l'ordre de génération.
+  let theropodesLeft = index >= config.theropode.minFloor ? config.theropode.maxPerFloor : 0;
+
   const rooms: Record<RoomId, Room> = {};
   for (let i = 0; i < cells.length; i += 1) {
     const kind = kinds[i]!;
@@ -529,7 +550,13 @@ export function generateFloor(
     const obstacles = generateObstacles(rng, kind, bounds, doorPoints);
     const pits = kind === 'combat' ? generatePits(rng, bounds, doorPoints, obstacles, config) : [];
     const blocked = [...obstacles, ...pits];
-    const enemySpawns = kind === 'combat' ? generateEnemySpawns(rng, bounds, config, blocked) : [];
+    let enemySpawns: EnemySpawn[] = [];
+    if (kind === 'combat') {
+      const withTheropode =
+        theropodesLeft > 0 && nextFloat(rng) < config.theropode.chancePerCombatRoom;
+      if (withTheropode) theropodesLeft -= 1;
+      enemySpawns = generateEnemySpawns(rng, bounds, config, blocked, index, withTheropode);
+    }
     rooms[roomIds[i]!] = {
       id: roomIds[i]!,
       kind,

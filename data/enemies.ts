@@ -52,7 +52,11 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackCooldownMs: 700,
     patrolRadius: 80,
   },
-  // Placeholders : jamais spawnés pour l'instant, le Record exige toutes les clés.
+  /**
+   * Mini-boss (étage 3+, 1 max par étage) : lent mais tanky, il force le kite
+   * autour des obstacles et la gestion de munitions. 120 PV = 12 balles de
+   * handgun : tuable en un chargeur, la recharge sert de marge d'erreur.
+   */
   theropode: {
     maxHealth: 120,
     radius: 26,
@@ -63,6 +67,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackCooldownMs: 1500,
     patrolRadius: 60,
   },
+  // Placeholder : jamais spawné pour l'instant, le Record exige toutes les clés.
   boss: {
     maxHealth: 400,
     radius: 36,
