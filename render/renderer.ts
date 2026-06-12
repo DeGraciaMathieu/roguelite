@@ -12,6 +12,17 @@ import { PROJECTILE_RADIUS, WALL_THICKNESS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
 import { reloadDurationMultiplier } from '@/systems/relics';
 import { extractionAvailable, extractionZone, stairZone } from '@/systems/stairs';
+import {
+  EFFECTS_ENABLED,
+  ENEMY_FLASH_MS,
+  PLAYER_DAMAGE_FLASH_MS,
+  createEffectPool,
+  effectProgress,
+  spawnDashGhost,
+  spawnDeathRing,
+  spawnImpactSparks,
+  tickEffects,
+} from './effects';
 import { drawMinimap } from './minimap';
 
 const COLOR_FLOOR = 0x1a1d22;
@@ -53,6 +64,16 @@ const LOOT_DRAW_H = 8;
 
 const AIM_INDICATOR_LENGTH = 22;
 const DOOR_DRAW_WIDTH = 64;
+
+const COLOR_ENEMY_FLASH = 0xffffff;
+const COLOR_DAMAGE_VIGNETTE = 0xe5533d;
+const DAMAGE_VIGNETTE_THICKNESS = 26;
+const DAMAGE_VIGNETTE_MAX_ALPHA = 0.4;
+/** Recul de tir : 1-2 px, une frame — plus marqué au shotgun (pellets > 1). */
+const RECOIL_PX_SINGLE = 1;
+const RECOIL_PX_MULTI = 2;
+/** Cadence de ponte des fantômes de dash (~3 sur un dash de 150 ms). */
+const DASH_GHOST_INTERVAL_MS = 50;
 
 const RELOAD_BAR_WIDTH = 28;
 const RELOAD_BAR_HEIGHT = 4;
@@ -150,16 +171,188 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   const enemyGraphics = new Graphics();
   world.addChild(enemyGraphics);
 
+  // Effets éphémères : au-dessus des ennemis, sous le joueur et ses tirs.
+  const effectsGraphics = new Graphics();
+  world.addChild(effectsGraphics);
+
   const projectileGraphics = new Graphics();
   world.addChild(projectileGraphics);
 
   const playerGraphics = new Graphics();
   world.addChild(playerGraphics);
 
+  // Voile de dégât : espace écran, sous la minimap pour la laisser lisible.
+  const vignetteGraphics = new Graphics();
+  app.stage.addChild(vignetteGraphics);
+
   const minimapGraphics = new Graphics();
   app.stage.addChild(minimapGraphics);
 
   let prevPlayerPos: Vec2 = { ...state.player.pos };
+
+  // --- Feedback de combat : état de rendu pur, alimenté par diff d'état ------
+  // Le renderer ne voit que l'état courant ; on garde une photo de la frame
+  // précédente (PV par ennemi, projectiles vivants…) pour en déduire les
+  // impacts, morts et tirs. Les entrées sont réutilisées : pas d'allocation
+  // par frame en croisière, hors apparition d'une entité nouvelle.
+  interface EnemySnap {
+    x: number;
+    y: number;
+    radius: number;
+    color: number;
+    health: number;
+    seen: boolean;
+  }
+  interface ProjectileSnap {
+    x: number;
+    y: number;
+    seen: boolean;
+  }
+  const effectPool = createEffectPool();
+  const enemySnaps = new Map<string, EnemySnap>();
+  const projectileSnaps = new Map<string, ProjectileSnap>();
+  const enemyFlashUntil = new Map<string, number>();
+  let prevPlayerHealth = state.player.health.current;
+  let prevWeaponKey = '';
+  let prevAmmoInMag = -1;
+  let playerFlashUntil = 0;
+  let lastGhostAt = 0;
+  let recoilPx = 0;
+  let floorKey = `${state.floor.seed}:${state.floor.index}`;
+  let lastFrameAt = performance.now();
+
+  function resetFeedback(renderState: RunState): void {
+    enemySnaps.clear();
+    projectileSnaps.clear();
+    enemyFlashUntil.clear();
+    for (const effect of effectPool) effect.active = false;
+    prevPlayerHealth = renderState.player.health.current;
+    recoilPx = 0;
+  }
+
+  function inRoomBounds(room: Room, x: number, y: number): boolean {
+    const b = room.bounds;
+    return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  }
+
+  function updateFeedback(renderState: RunState, room: Room, now: number): void {
+    // Ennemis : PV en baisse → flash ; disparu → anneau de mort.
+    for (const enemy of Object.values(renderState.enemies)) {
+      const snap = enemySnaps.get(enemy.id);
+      if (snap) {
+        if (enemy.health.current < snap.health) enemyFlashUntil.set(enemy.id, now + ENEMY_FLASH_MS);
+        snap.x = enemy.pos.x;
+        snap.y = enemy.pos.y;
+        snap.health = enemy.health.current;
+        snap.seen = true;
+      } else {
+        enemySnaps.set(enemy.id, {
+          x: enemy.pos.x,
+          y: enemy.pos.y,
+          radius: enemy.radius,
+          color: COLOR_ENEMY[enemy.kind],
+          health: enemy.health.current,
+          seen: true,
+        });
+      }
+    }
+    for (const [id, snap] of enemySnaps) {
+      if (!snap.seen) {
+        if (inRoomBounds(room, snap.x, snap.y)) {
+          spawnDeathRing(effectPool, snap.x, snap.y, snap.radius, snap.color);
+        }
+        enemySnaps.delete(id);
+        enemyFlashUntil.delete(id);
+      } else {
+        snap.seen = false;
+      }
+    }
+
+    // Projectiles : disparu → étincelles au dernier point connu (mur ou chair).
+    for (const projectile of renderState.projectiles) {
+      const snap = projectileSnaps.get(projectile.id);
+      if (snap) {
+        snap.x = projectile.pos.x;
+        snap.y = projectile.pos.y;
+        snap.seen = true;
+      } else {
+        projectileSnaps.set(projectile.id, { x: projectile.pos.x, y: projectile.pos.y, seen: true });
+      }
+    }
+    for (const [id, snap] of projectileSnaps) {
+      if (!snap.seen) {
+        if (inRoomBounds(room, snap.x, snap.y)) {
+          spawnImpactSparks(effectPool, snap.x, snap.y, COLOR_PROJECTILE);
+        }
+        projectileSnaps.delete(id);
+      } else {
+        snap.seen = false;
+      }
+    }
+
+    // PV du joueur en baisse → voile rouge sur les bords.
+    const health = renderState.player.health.current;
+    if (health < prevPlayerHealth) playerFlashUntil = now + PLAYER_DAMAGE_FLASH_MS;
+    prevPlayerHealth = health;
+
+    // Chargeur entamé sur la même arme → recul d'une frame.
+    const weapon = renderState.inventory.weapons[renderState.inventory.equippedIndex];
+    if (weapon) {
+      const def = getWeaponDef(weapon.defId);
+      const key = `${weapon.defId}:${renderState.inventory.equippedIndex}`;
+      if (key === prevWeaponKey && weapon.ammoInMag < prevAmmoInMag) {
+        recoilPx = def.pellets > 1 ? RECOIL_PX_MULTI : RECOIL_PX_SINGLE;
+      }
+      prevWeaponKey = key;
+      prevAmmoInMag = weapon.ammoInMag;
+    }
+
+    // Dash en cours → fantômes du cercle joueur, cadence bornée.
+    if (renderState.player.dash.remainingMs > 0 && now - lastGhostAt >= DASH_GHOST_INTERVAL_MS) {
+      const player = renderState.player;
+      spawnDashGhost(
+        effectPool,
+        player.pos.x,
+        player.pos.y,
+        player.radius,
+        COLOR_PLAYER_BY_HEALTH[healthState(player.health)],
+      );
+      lastGhostAt = now;
+    }
+  }
+
+  function drawEffects(now: number): void {
+    effectsGraphics.clear();
+    for (const effect of effectPool) {
+      if (!effect.active) continue;
+      const progress = effectProgress(effect);
+      const fade = 1 - progress;
+      if (effect.kind === 'spark') {
+        effectsGraphics.circle(effect.x, effect.y, effect.radius).fill({ color: effect.color, alpha: fade });
+      } else if (effect.kind === 'deathRing') {
+        // Le cercle du défunt se dilate et s'estompe.
+        effectsGraphics
+          .circle(effect.x, effect.y, effect.radius * (1 + progress))
+          .stroke({ width: 2, color: effect.color, alpha: fade * 0.8 });
+      } else {
+        effectsGraphics.circle(effect.x, effect.y, effect.radius).fill({ color: effect.color, alpha: fade * 0.3 });
+      }
+    }
+
+    vignetteGraphics.clear();
+    if (now < playerFlashUntil) {
+      const alpha = ((playerFlashUntil - now) / PLAYER_DAMAGE_FLASH_MS) * DAMAGE_VIGNETTE_MAX_ALPHA;
+      const w = app.screen.width;
+      const h = app.screen.height;
+      const t = DAMAGE_VIGNETTE_THICKNESS;
+      vignetteGraphics
+        .rect(0, 0, w, t)
+        .rect(0, h - t, w, t)
+        .rect(0, t, t, h - 2 * t)
+        .rect(w - t, t, t, h - 2 * t)
+        .fill({ color: COLOR_DAMAGE_VIGNETTE, alpha });
+    }
+  }
 
   // La minimap ne se redessine que quand la découverte ou la salle change.
   let minimapKey = '';
@@ -182,6 +375,10 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
     },
 
     render(renderState: RunState, alpha: number): void {
+      const now = performance.now();
+      const frameDtMs = Math.min(100, now - lastFrameAt);
+      lastFrameAt = now;
+
       const room = currentRoom(renderState);
       if (room.id !== viewRoom.id) {
         viewRoom = room;
@@ -192,6 +389,24 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         prevPlayerPos = { ...renderState.player.pos };
       }
       refreshMinimap(renderState);
+
+      // Nouvel étage : les photos de la frame précédente n'ont plus de sens.
+      const stateFloorKey = `${renderState.floor.seed}:${renderState.floor.index}`;
+      if (stateFloorKey !== floorKey) {
+        floorKey = stateFloorKey;
+        resetFeedback(renderState);
+      }
+
+      if (EFFECTS_ENABLED) {
+        updateFeedback(renderState, room, now);
+        tickEffects(effectPool, frameDtMs);
+        // Recul de tir : une frame, dans l'axe opposé à la visée.
+        const recoilX = recoilPx * -Math.cos(renderState.player.aim);
+        const recoilY = recoilPx * -Math.sin(renderState.player.aim);
+        world.position.set(-room.bounds.x + recoilX, -room.bounds.y + recoilY);
+        recoilPx = 0;
+        drawEffects(now);
+      }
 
       lootGraphics.clear();
       for (const spawn of room.lootSpawns) {
@@ -219,11 +434,14 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
 
       enemyGraphics.clear();
       for (const enemy of Object.values(renderState.enemies)) {
-        const b = room.bounds;
-        const inRoom =
-          enemy.pos.x >= b.x && enemy.pos.x <= b.x + b.w && enemy.pos.y >= b.y && enemy.pos.y <= b.y + b.h;
-        if (!inRoom) continue;
-        enemyGraphics.circle(enemy.pos.x, enemy.pos.y, enemy.radius).fill(COLOR_ENEMY[enemy.kind]);
+        if (!inRoomBounds(room, enemy.pos.x, enemy.pos.y)) continue;
+        // Impact tout frais : l'ennemi blanchit le temps du flash.
+        const flashUntil = enemyFlashUntil.get(enemy.id);
+        const flashing = flashUntil !== undefined && now < flashUntil;
+        if (flashUntil !== undefined && !flashing) enemyFlashUntil.delete(enemy.id);
+        enemyGraphics
+          .circle(enemy.pos.x, enemy.pos.y, enemy.radius)
+          .fill(flashing ? COLOR_ENEMY_FLASH : COLOR_ENEMY[enemy.kind]);
         enemyGraphics
           .moveTo(enemy.pos.x, enemy.pos.y)
           .lineTo(
