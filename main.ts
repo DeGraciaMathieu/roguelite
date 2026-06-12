@@ -24,6 +24,7 @@ import { applyRunRewards, purchaseUnlock, selectLoadoutWeapon } from '@/systems/
 import { updateMovement } from '@/systems/movement';
 import { createRun } from '@/systems/run';
 import { updateStairs } from '@/systems/stairs';
+import { updateStatus } from '@/systems/status';
 
 /** Seed rejouable via `?seed=123` ; aléatoire sinon. */
 function resolveSeed(): number {
@@ -112,6 +113,7 @@ async function boot(): Promise<void> {
       updateLootPickup(state);
       updateConsumables(state, intent);
       updateAi(state, dtMs);
+      updateStatus(state, dtMs);
       updateCombat(state, intent);
       updateProjectiles(state, dtMs);
       state.elapsedMs += dtMs;

@@ -47,6 +47,12 @@ export const EXIT_ZONE_OFFSET = 48;
 /** Étage (index 0-based) à partir duquel la dalle d'extraction apparaît. */
 export const EXTRACTION_MIN_FLOOR = 1;
 
+// --- Saignement -----------------------------------------------------------------
+
+/** 8 s à 2 PV/s = 16 PV : ~une morsure de raptor en plus si on ne se soigne pas. */
+export const BLEED_DURATION_MS = 8000;
+export const BLEED_DPS = 2;
+
 // --- Récompenses méta ---------------------------------------------------------
 
 export const CURRENCY_PER_KILL = 5;
