@@ -15,16 +15,9 @@ import { createGameOverlay } from '@/render/overlay';
 import { createRenderer } from '@/render/renderer';
 import type { Renderer } from '@/render/renderer';
 import { HANDGUN_ID } from '@/data/weapons';
-import { updateAi } from '@/systems/ai';
-import { updateCombat, updateProjectiles } from '@/systems/combat';
-import { updateConsumables } from '@/systems/consumables';
-import { updateDoorTransition } from '@/systems/doors';
-import { updateLootPickup } from '@/systems/loot';
 import { applyRunRewards, purchaseUnlock } from '@/systems/meta';
-import { updateMovement } from '@/systems/movement';
 import { createRun } from '@/systems/run';
-import { updateStairs } from '@/systems/stairs';
-import { updateStatus } from '@/systems/status';
+import { stepRun } from '@/systems/step';
 
 /** Seed rejouable via `?seed=123` ; aléatoire sinon. */
 function resolveSeed(): number {
@@ -100,16 +93,7 @@ async function boot(): Promise<void> {
 
       renderer.snapshot(state);
       const intent = input.intent(renderer.screenToWorld);
-      updateMovement(state, intent, dtMs);
-      updateDoorTransition(state);
-      updateStairs(state);
-      updateLootPickup(state);
-      updateConsumables(state, intent);
-      updateAi(state, dtMs);
-      updateStatus(state, dtMs);
-      updateCombat(state, intent);
-      updateProjectiles(state, dtMs);
-      state.elapsedMs += dtMs;
+      stepRun(state, intent, dtMs);
 
       if (state.status !== 'active') {
         meta = applyRunRewards(meta, state.stats, state.status);

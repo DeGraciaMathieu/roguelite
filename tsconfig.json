@@ -25,6 +25,7 @@
     "render",
     "input",
     "audio",
-    "data"
+    "data",
+    "harness"
   ]
 }
