@@ -12,7 +12,7 @@ import { segmentIntersectsRect } from '@/systems/collision';
 /** Halo de proximité, dans toutes les directions : on n'est jamais aveugle au contact. */
 export const VISION_NEAR_RADIUS = 120;
 /** Portée de la vision dans le cône de visée (~lampe), au-delà de l'aggro raptor (260). */
-export const VISION_CONE_RADIUS = 340;
+export const VISION_CONE_RADIUS = 480;
 /** Demi-angle du cône : 36° de part et d'autre de la visée, soit 72° d'ouverture. */
 export const VISION_CONE_HALF_ANGLE = Math.PI / 5;
 
