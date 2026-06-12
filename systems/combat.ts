@@ -44,6 +44,16 @@ function spawnProjectiles(state: RunState, def: WeaponDef): void {
 }
 
 export function updateCombat(state: RunState, intent: PlayerIntent): void {
+  // Changement d'arme : chaque instance garde son chargeur et sa recharge en
+  // cours (une recharge échue se termine au retour sur l'arme).
+  if (
+    intent.weaponSlot !== null &&
+    intent.weaponSlot >= 0 &&
+    intent.weaponSlot < state.inventory.weapons.length
+  ) {
+    state.inventory.equippedIndex = intent.weaponSlot;
+  }
+
   const weapon = equippedWeapon(state);
   if (!weapon) return;
   const def = getWeaponDef(weapon.defId);

@@ -17,6 +17,7 @@ function useIntent(useConsumable = true): PlayerIntent {
     reload: false,
     useConsumable,
     dash: false,
+    weaponSlot: null,
   };
 }
 

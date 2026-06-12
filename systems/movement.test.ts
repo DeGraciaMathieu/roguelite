@@ -13,6 +13,7 @@ function intent(moveX: number, moveY: number, aimWorld = { x: 0, y: 0 }): Player
     reload: false,
     useConsumable: false,
     dash: false,
+    weaponSlot: null,
   };
 }
 

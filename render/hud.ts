@@ -142,7 +142,7 @@ export function createHud(): Hud {
         const def = getWeaponDef(weapon.defId);
         const reserve = state.inventory.ammo[def.ammo];
         const reloading = weapon.reloadingUntilMs !== null;
-        const text = `${def.name.toUpperCase()}  ${weapon.ammoInMag} / ${reserve}${
+        const text = `[${state.inventory.equippedIndex + 1}] ${def.name.toUpperCase()}  ${weapon.ammoInMag} / ${reserve}${
           reloading ? ' — RECHARGE…' : ''
         }`;
         const color =

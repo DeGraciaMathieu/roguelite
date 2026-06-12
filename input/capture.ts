@@ -20,6 +20,12 @@ const DOWN_CODES = ['KeyS', 'ArrowDown'];
 const RELOAD_CODES = ['KeyR'];
 const USE_CONSUMABLE_CODES = ['KeyH'];
 const DASH_CODES = ['Space'];
+/** Touches d'arme : l'index du tableau est l'index du slot d'inventaire. */
+const WEAPON_SLOT_CODES: readonly (readonly string[])[] = [
+  ['Digit1', 'Numpad1'],
+  ['Digit2', 'Numpad2'],
+  ['Digit3', 'Numpad3'],
+];
 
 export function createInputCapture(surface: HTMLElement): InputCapture {
   const pressed = new Set<string>();
@@ -69,6 +75,9 @@ export function createInputCapture(surface: HTMLElement): InputCapture {
       const move: Vec2 = length > 0 ? { x: x / length, y: y / length } : { x: 0, y: 0 };
       const useConsumable = USE_CONSUMABLE_CODES.some((code) => justPressed.has(code));
       const dash = DASH_CODES.some((code) => justPressed.has(code));
+      const weaponSlot = WEAPON_SLOT_CODES.findIndex((codes) =>
+        codes.some((code) => justPressed.has(code)),
+      );
       justPressed.clear();
       return {
         move,
@@ -77,6 +86,7 @@ export function createInputCapture(surface: HTMLElement): InputCapture {
         reload: isPressed(RELOAD_CODES),
         useConsumable,
         dash,
+        weaponSlot: weaponSlot === -1 ? null : weaponSlot,
       };
     },
     dispose(): void {

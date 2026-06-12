@@ -4,7 +4,7 @@ import type { Enemy, RunState, WeaponInstance } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
 import { createDebugRun } from '@/data/debugRoom';
 import { START_AMMO } from '@/data/balance';
-import { getWeaponDef } from '@/data/weapons';
+import { RIFLE_ID, createWeaponInstance, getWeaponDef } from '@/data/weapons';
 import { updateCombat, updateProjectiles } from './combat';
 import { spawnRoomContent } from './spawn';
 
@@ -16,6 +16,7 @@ function intent(overrides: Partial<PlayerIntent> = {}): PlayerIntent {
     reload: false,
     useConsumable: false,
     dash: false,
+    weaponSlot: null,
     ...overrides,
   };
 }
@@ -107,6 +108,79 @@ describe('updateCombat', () => {
     state.elapsedMs += def.reloadMs - 1;
     updateCombat(state, intent({ fire: true }));
     expect(state.projectiles).toHaveLength(1); // uniquement le tir initial
+  });
+
+  it('les touches 1-3 changent l’arme équipée, les slots invalides sont ignorés', () => {
+    const state = createDebugRun(1);
+    expect(state.inventory.equippedIndex).toBe(0);
+
+    updateCombat(state, intent({ weaponSlot: 1 }));
+    expect(state.inventory.equippedIndex).toBe(1);
+
+    updateCombat(state, intent({ weaponSlot: 5 }));
+    expect(state.inventory.equippedIndex).toBe(1);
+
+    updateCombat(state, intent({ weaponSlot: 0 }));
+    expect(state.inventory.equippedIndex).toBe(0);
+  });
+
+  it('chaque arme garde son chargeur et sa recharge en changeant de slot', () => {
+    const state = createDebugRun(1);
+    const def = getWeaponDef(equipped(state).defId);
+
+    updateCombat(state, intent({ fire: true })); // entame le chargeur du handgun
+    state.elapsedMs = def.fireRateMs;
+    updateCombat(state, intent({ reload: true })); // lance sa recharge
+    const reloadingUntil = equipped(state).reloadingUntilMs;
+    expect(reloadingUntil).not.toBeNull();
+
+    updateCombat(state, intent({ weaponSlot: 2 })); // passe au rifle
+    expect(equipped(state).reloadingUntilMs).toBeNull(); // le rifle, lui, est prêt
+
+    updateCombat(state, intent({ weaponSlot: 0 })); // revient au handgun
+    expect(equipped(state).reloadingUntilMs).toBe(reloadingUntil);
+  });
+
+  it('le rifle tire un seul projectile précis, à cadence longue', () => {
+    const state = createDebugRun(1);
+    state.inventory.weapons = [createWeaponInstance(RIFLE_ID)];
+    const def = getWeaponDef(RIFLE_ID);
+
+    updateCombat(state, intent({ fire: true }));
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.projectiles[0]?.damage).toBe(def.damage);
+    expect(state.projectiles[0]?.ammo).toBe('rifle');
+
+    // Cadence longue : rien ne part avant fireRateMs.
+    state.elapsedMs = def.fireRateMs - 1;
+    updateCombat(state, intent({ fire: true }));
+    expect(state.projectiles).toHaveLength(1);
+
+    state.elapsedMs = def.fireRateMs;
+    updateCombat(state, intent({ fire: true }));
+    expect(state.projectiles).toHaveLength(2);
+  });
+
+  it('chargeur court du rifle : recharge auto après 5 tirs', () => {
+    const state = createDebugRun(1);
+    state.inventory.weapons = [createWeaponInstance(RIFLE_ID)];
+    const def = getWeaponDef(RIFLE_ID);
+
+    for (let shot = 0; shot < def.magazineSize; shot += 1) {
+      state.elapsedMs = shot * def.fireRateMs;
+      updateCombat(state, intent({ fire: true }));
+    }
+    expect(state.projectiles).toHaveLength(def.magazineSize);
+    expect(equipped(state).ammoInMag).toBe(0);
+
+    // Chargeur vide + tir : la recharge démarre, servie par la réserve rifle.
+    updateCombat(state, intent({ fire: true }));
+    expect(equipped(state).reloadingUntilMs).toBe(state.elapsedMs + def.reloadMs);
+
+    state.elapsedMs += def.reloadMs;
+    updateCombat(state, intent());
+    expect(equipped(state).ammoInMag).toBe(def.magazineSize);
+    expect(state.inventory.ammo.rifle).toBe(START_AMMO.rifle - def.magazineSize);
   });
 
   it('une relique de dégâts multiplie les dégâts des projectiles', () => {

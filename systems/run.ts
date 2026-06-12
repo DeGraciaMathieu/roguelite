@@ -4,9 +4,9 @@
  */
 
 import { createRng } from '@/domain';
-import type { AmmoType, Floor, Inventory, Player, Room, RunState, StartingLoadout } from '@/domain';
+import type { Floor, Inventory, Player, Room, RunState, StartingLoadout } from '@/domain';
 import { PLAYER_MAX_HEALTH, PLAYER_RADIUS, START_AMMO } from '@/data/balance';
-import { HANDGUN_ID, createWeaponInstance, getWeaponDef } from '@/data/weapons';
+import { HANDGUN_ID, RIFLE_ID, SHOTGUN_ID, createWeaponInstance } from '@/data/weapons';
 import { deriveFloorSeed, generateFloor } from './floorgen';
 import { spawnRoomContent } from './spawn';
 
@@ -24,15 +24,20 @@ function createPlayer(room: Room): Player {
   };
 }
 
+/** Ordre fixe des slots d'armes : les touches 1-3 s'y réfèrent. */
+const WEAPON_SLOTS = [HANDGUN_ID, SHOTGUN_ID, RIFLE_ID] as const;
+
 function createStartingInventory(loadout: StartingLoadout): Inventory {
-  const def = getWeaponDef(loadout.weaponId);
-  // Seule la réserve de l'arme choisie est servie : la rareté reste le pilier.
-  const ammo: Record<AmmoType, number> = { handgun: 0, shotgun: 0, rifle: 0 };
-  ammo[def.ammo] = START_AMMO[def.ammo];
+  // Les trois armes sont toujours portées ; le loadout choisit celle en main.
+  const weapons = WEAPON_SLOTS.map(createWeaponInstance);
+  const equippedIndex = Math.max(
+    0,
+    weapons.findIndex((weapon) => weapon.defId === loadout.weaponId),
+  );
   return {
-    ammo,
-    weapons: [createWeaponInstance(loadout.weaponId)],
-    equippedIndex: 0,
+    ammo: { ...START_AMMO },
+    weapons,
+    equippedIndex,
     consumables: [],
     keyItems: [],
     capacity: 4,

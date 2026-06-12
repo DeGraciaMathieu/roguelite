@@ -18,4 +18,6 @@ export interface PlayerIntent {
   useConsumable: boolean;
   /** Dash (Espace, front montant : un appui = une poussée). */
   dash: boolean;
+  /** Arme demandée (touches 1-3, front montant) : index dans `inventory.weapons`, sinon null. */
+  weaponSlot: number | null;
 }

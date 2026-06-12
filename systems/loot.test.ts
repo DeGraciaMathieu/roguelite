@@ -3,7 +3,7 @@ import { asId } from '@/domain';
 import type { LootSpawn, Room, RunState } from '@/domain';
 import { MEDKIT_ID } from '@/data/consumables';
 import { createDebugRun } from '@/data/debugRoom';
-import { SHOTGUN_ID, createWeaponInstance } from '@/data/weapons';
+import { HANDGUN_ID, SHOTGUN_ID, createWeaponInstance } from '@/data/weapons';
 import { updateLootPickup } from './loot';
 
 /** Salle de debug avec du loot posé ; joueur au centre (400, 300). */
@@ -43,6 +43,9 @@ describe('updateLootPickup', () => {
 
   it('laisse au sol les munitions d’une arme non portée', () => {
     const { state, room } = runWithLoot({ kind: 'ammo', at: AT_PLAYER, ammo: 'shotgun', amount: 4 });
+    // La run standard porte les 3 armes : on isole la règle de sélectivité.
+    state.inventory.weapons = [createWeaponInstance(HANDGUN_ID)];
+    state.inventory.ammo.shotgun = 0;
 
     updateLootPickup(state);
 
@@ -53,6 +56,7 @@ describe('updateLootPickup', () => {
   it('ramasse les munitions shotgun quand le shotgun est porté', () => {
     const { state, room } = runWithLoot({ kind: 'ammo', at: AT_PLAYER, ammo: 'shotgun', amount: 4 });
     state.inventory.weapons = [createWeaponInstance(SHOTGUN_ID)];
+    state.inventory.ammo.shotgun = 0;
 
     updateLootPickup(state);
 
