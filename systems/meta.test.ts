@@ -9,13 +9,7 @@ import {
 } from '@/data/balance';
 import { UNLOCK_DEFS } from '@/data/unlocks';
 import { HANDGUN_ID, RIFLE_ID, SHOTGUN_ID } from '@/data/weapons';
-import {
-  applyRunRewards,
-  purchaseUnlock,
-  runCurrencyReward,
-  selectLoadoutWeapon,
-  unlockedWeapons,
-} from './meta';
+import { applyRunRewards, purchaseUnlock, runCurrencyReward } from './meta';
 
 const SHOTGUN_UNLOCK = UNLOCK_DEFS.find((def) => def.weaponId === SHOTGUN_ID);
 const RIFLE_UNLOCK = UNLOCK_DEFS.find((def) => def.weaponId === RIFLE_ID);
@@ -92,32 +86,13 @@ describe('purchaseUnlock', () => {
   });
 });
 
-describe('loadout', () => {
-  it('ne propose que l’arme de base sans déblocage', () => {
-    expect(unlockedWeapons(defaultMeta(HANDGUN_ID))).toEqual([HANDGUN_ID]);
-  });
-
-  it('propose le shotgun une fois débloqué et permet de le sélectionner', () => {
-    const meta = { ...defaultMeta(HANDGUN_ID), unlocks: [SHOTGUN_UNLOCK.id] };
-
-    expect(unlockedWeapons(meta)).toEqual([HANDGUN_ID, SHOTGUN_ID]);
-    expect(selectLoadoutWeapon(meta, SHOTGUN_ID)?.loadout).toEqual({ weaponId: SHOTGUN_ID });
-  });
-
-  it('refuse une arme non débloquée', () => {
-    expect(selectLoadoutWeapon(defaultMeta(HANDGUN_ID), SHOTGUN_ID)).toBeNull();
-    expect(selectLoadoutWeapon(defaultMeta(HANDGUN_ID), RIFLE_ID)).toBeNull();
-  });
-
-  it('débloque, propose et sélectionne le rifle', () => {
-    let meta = { ...defaultMeta(HANDGUN_ID), currency: RIFLE_UNLOCK.cost };
+describe('déblocage du rifle', () => {
+  it('débite le coût et enregistre le déblocage', () => {
+    const meta = { ...defaultMeta(HANDGUN_ID), currency: RIFLE_UNLOCK.cost };
 
     const purchased = purchaseUnlock(meta, RIFLE_UNLOCK);
-    expect(purchased).not.toBeNull();
-    meta = purchased!;
 
-    expect(meta.currency).toBe(0);
-    expect(unlockedWeapons(meta)).toEqual([HANDGUN_ID, RIFLE_ID]);
-    expect(selectLoadoutWeapon(meta, RIFLE_ID)?.loadout).toEqual({ weaponId: RIFLE_ID });
+    expect(purchased?.currency).toBe(0);
+    expect(purchased?.unlocks).toContain(RIFLE_UNLOCK.id);
   });
 });

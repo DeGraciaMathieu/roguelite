@@ -20,7 +20,7 @@ import { updateCombat, updateProjectiles } from '@/systems/combat';
 import { updateConsumables } from '@/systems/consumables';
 import { updateDoorTransition } from '@/systems/doors';
 import { updateLootPickup } from '@/systems/loot';
-import { applyRunRewards, purchaseUnlock, selectLoadoutWeapon } from '@/systems/meta';
+import { applyRunRewards, purchaseUnlock } from '@/systems/meta';
 import { updateMovement } from '@/systems/movement';
 import { createRun } from '@/systems/run';
 import { updateStairs } from '@/systems/stairs';
@@ -66,7 +66,7 @@ async function boot(): Promise<void> {
     overlay.setSeed(seed);
     history.replaceState(null, '', `?seed=${seed}`);
 
-    const state = createRun(seed, meta.loadout);
+    const state = createRun(seed);
     const renderer = await createRenderer(state);
     container.appendChild(renderer.canvas);
     session = { state, renderer, input: createInputCapture(renderer.canvas) };
@@ -83,13 +83,6 @@ async function boot(): Promise<void> {
       },
       onPurchase: (def): void => {
         const updated = purchaseUnlock(meta, def);
-        if (!updated) return;
-        meta = updated;
-        metaStorage.save(meta);
-        showHub();
-      },
-      onSelectWeapon: (id): void => {
-        const updated = selectLoadoutWeapon(meta, id);
         if (!updated) return;
         meta = updated;
         metaStorage.save(meta);

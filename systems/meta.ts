@@ -4,16 +4,14 @@
  * sortant (ou null si l'opération est refusée), jamais de mutation.
  */
 
-import type { MetaState, RunStats, RunStatus, WeaponDefId } from '@/domain';
+import type { MetaState, RunStats, RunStatus } from '@/domain';
 import {
   CURRENCY_FLOOR_DEPTH_BONUS,
   CURRENCY_PER_FLOOR,
   CURRENCY_PER_KILL,
   EXTRACTION_BONUS_MULTIPLIER,
 } from '@/data/balance';
-import { UNLOCK_DEFS } from '@/data/unlocks';
 import type { UnlockDef } from '@/data/unlocks';
-import { HANDGUN_ID } from '@/data/weapons';
 
 /**
  * Le n-ième étage descendu (0-based) rapporte base + n × bonus : somme
@@ -52,17 +50,3 @@ export function purchaseUnlock(meta: MetaState, def: UnlockDef): MetaState | nul
   };
 }
 
-/** Armes disponibles au loadout : l'arme de base + celles débloquées. */
-export function unlockedWeapons(meta: MetaState): WeaponDefId[] {
-  const ids: WeaponDefId[] = [HANDGUN_ID];
-  for (const def of UNLOCK_DEFS) {
-    if (meta.unlocks.includes(def.id)) ids.push(def.weaponId);
-  }
-  return ids;
-}
-
-/** Sélection refusée si l'arme n'est pas débloquée → null. */
-export function selectLoadoutWeapon(meta: MetaState, weaponId: WeaponDefId): MetaState | null {
-  if (!unlockedWeapons(meta).includes(weaponId)) return null;
-  return { ...meta, loadout: { weaponId } };
-}

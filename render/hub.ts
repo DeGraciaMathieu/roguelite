@@ -3,16 +3,13 @@
  * toute décision aux callbacks de la composition root : aucune logique ici.
  */
 
-import type { MetaState, WeaponDefId } from '@/domain';
+import type { MetaState } from '@/domain';
 import { UNLOCK_DEFS } from '@/data/unlocks';
 import type { UnlockDef } from '@/data/unlocks';
-import { getWeaponDef } from '@/data/weapons';
-import { unlockedWeapons } from '@/systems/meta';
 
 export interface HubActions {
   onStartRun(): void;
   onPurchase(def: UnlockDef): void;
-  onSelectWeapon(id: WeaponDefId): void;
 }
 
 export interface HubScreen {
@@ -60,17 +57,6 @@ function buildHub(meta: MetaState, actions: HubActions): HTMLDivElement {
       }`,
     ),
   );
-
-  panel.appendChild(sectionTitle('LOADOUT'));
-  for (const weaponId of unlockedWeapons(meta)) {
-    const def = getWeaponDef(weaponId);
-    const button = document.createElement('button');
-    const selected = meta.loadout.weaponId === weaponId;
-    button.textContent = selected ? `[ ${def.name} ]` : def.name;
-    button.style.cssText = BUTTON_STYLE + (selected ? 'border-color: #f0c33c; color: #f0c33c;' : '');
-    button.addEventListener('click', () => actions.onSelectWeapon(weaponId));
-    panel.appendChild(button);
-  }
 
   const purchasable = UNLOCK_DEFS.filter((def) => !meta.unlocks.includes(def.id));
   if (purchasable.length > 0) {
