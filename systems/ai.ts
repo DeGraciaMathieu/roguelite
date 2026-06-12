@@ -12,11 +12,13 @@
  * déterminisme de la run est préservé.
  */
 
-import { isDead } from '@/domain';
+import { isDead, nextFloat } from '@/domain';
 import type { Enemy, Raptor, Rect, RunState, Vec2 } from '@/domain';
+import { BLEED_DPS, BLEED_DURATION_MS } from '@/data/balance';
 import { ENEMY_ARCHETYPES, RAPTOR_PACK } from '@/data/enemies';
 import { moveCircle, pointInRect, segmentIntersectsRect, wallRects } from './collision';
 import { currentRoom } from './movement';
+import { applyBleed } from './status';
 
 /** Distance de validation d'un waypoint de patrouille. */
 const PATROL_WAYPOINT_TOLERANCE = 20;
@@ -195,6 +197,11 @@ export function updateAi(state: RunState, dtMs: number): void {
         enemy.facing = Math.atan2(player.pos.y - enemy.pos.y, player.pos.x - enemy.pos.x);
         if (enemy.ai.attackCooldownMs === 0) {
           player.health.current = Math.max(0, player.health.current - archetype.attackDamage);
+          // Morsure qui fait saigner : tirage sur le RNG de la run, consommé
+          // uniquement par les archétypes capables de l'infliger (déterminisme).
+          if (archetype.bleedChance > 0 && nextFloat(state.rng) < archetype.bleedChance) {
+            applyBleed(player, BLEED_DURATION_MS, BLEED_DPS);
+          }
           enemy.ai.attackCooldownMs = archetype.attackCooldownMs;
           if (isDead(player.health)) {
             state.status = 'dead';

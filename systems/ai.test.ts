@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createRng, nextFloat } from '@/domain';
 import type { Enemy, EnemyKind, RunState, Vec2 } from '@/domain';
 import { ENEMY_ARCHETYPES } from '@/data/enemies';
 import { createDebugRun } from '@/data/debugRoom';
@@ -110,6 +111,34 @@ describe('updateAi — meute', () => {
 
 describe('updateAi — attaque', () => {
   const archetype = ENEMY_ARCHETYPES.raptor;
+
+  it('la morsure applique le saignement selon le RNG de la run (déterministe)', () => {
+    // Le premier nextFloat du RNG de la run décide : on rejoue le tirage à
+    // l'identique pour connaître l'issue attendue de chaque seed.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const state = createDebugRun(seed);
+      const room = state.floor.rooms[state.floor.currentRoomId]!;
+      room.spawned = false;
+      room.enemySpawns = [{ kind: 'raptor', at: { x: 430, y: 300 } }];
+      spawnRoomContent(state, room);
+      const expected = nextFloat(createRng(seed)) < archetype.bleedChance;
+
+      updateAi(state, TICK_MS);
+
+      expect(state.player.status.some((status) => status.kind === 'bleed')).toBe(expected);
+    }
+  });
+
+  it('la morsure d’un compy ne fait jamais saigner ni ne consomme le RNG', () => {
+    const { state } = runWithEnemy('compy', { x: 422, y: 300 });
+    const rngBefore = JSON.stringify(state.rng);
+
+    updateAi(state, TICK_MS);
+
+    expect(state.player.health.current).toBeLessThan(state.player.health.max);
+    expect(state.player.status).toHaveLength(0);
+    expect(JSON.stringify(state.rng)).toBe(rngBefore);
+  });
 
   it('blesse le joueur au contact, sous cooldown', () => {
     // Contact : rayon raptor 14 + rayon joueur 12 + portée 6 = 32 ≥ 30.

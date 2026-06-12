@@ -19,6 +19,8 @@ export interface EnemyArchetype {
   attackCooldownMs: number;
   /** Amplitude de la boucle de patrouille autour du point de spawn. */
   patrolRadius: number;
+  /** Chance d'infliger un saignement à la morsure (0 = jamais). */
+  bleedChance: number;
 }
 
 /** Coordination de meute des raptors (géométrie pure, pas d'aléa). */
@@ -40,6 +42,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackDamage: 15,
     attackCooldownMs: 900,
     patrolRadius: 120,
+    bleedChance: 0.25,
   },
   /** Faible et lent, mais nombreux : du harcèlement, pas une menace seule. */
   compy: {
@@ -51,6 +54,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackDamage: 5,
     attackCooldownMs: 700,
     patrolRadius: 80,
+    bleedChance: 0,
   },
   /**
    * Mini-boss (étage 3+, 1 max par étage) : lent mais tanky, il force le kite
@@ -66,6 +70,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackDamage: 35,
     attackCooldownMs: 1500,
     patrolRadius: 60,
+    bleedChance: 0,
   },
   // Placeholder : jamais spawné pour l'instant, le Record exige toutes les clés.
   boss: {
@@ -77,5 +82,6 @@ export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
     attackDamage: 40,
     attackCooldownMs: 1200,
     patrolRadius: 0,
+    bleedChance: 0,
   },
 };
