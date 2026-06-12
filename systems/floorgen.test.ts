@@ -9,14 +9,15 @@ const SEEDS = [1, 42, 1337, 0xdeadbeef];
 /** Échantillon plus large pour les tests statistiques (mix, densité). */
 const MANY_SEEDS = Array.from({ length: 25 }, (_, i) => i + 1);
 
-/** Parcours BFS de salle en salle via les portes. */
-function reachableRooms(floor: Floor): Set<RoomId> {
+/** Parcours BFS de salle en salle via les portes, avec exclusion optionnelle d'une porte. */
+function reachableRooms(floor: Floor, excludedDoorId?: string): Set<RoomId> {
   const visited = new Set<RoomId>([floor.startRoomId]);
   const queue: RoomId[] = [floor.startRoomId];
   for (let head = 0; head < queue.length; head += 1) {
     const room = floor.rooms[queue[head]!];
     if (!room) continue;
     for (const doorId of room.doorIds) {
+      if (doorId === excludedDoorId) continue;
       const door = floor.doors[doorId];
       if (!door) continue;
       const next = door.roomA === room.id ? door.roomB : door.roomA;
@@ -144,6 +145,92 @@ describe('generateFloor — scaling de difficulté', () => {
         expect(room.enemySpawns.length).toBeLessThanOrEqual(
           DEFAULT_FLOOR_GEN.maxEnemiesPerCombatRoom + DEFAULT_FLOOR_GEN.theropode.maxPerFloor,
         );
+      }
+    }
+  });
+});
+
+describe('generateFloor — porte verrouillée + clé', () => {
+  const DEPTHS = [1, 2, 3, 4, 5];
+
+  function lockedDoors(floor: Floor) {
+    return Object.values(floor.doors).filter((door) => door.locked);
+  }
+
+  function keyRooms(floor: Floor) {
+    return Object.values(floor.rooms).filter((room) =>
+      room.lootSpawns.some((spawn) => spawn.kind === 'key'),
+    );
+  }
+
+  it('étage 0 : jamais de porte verrouillée ni de clé', () => {
+    for (const seed of MANY_SEEDS) {
+      const floor = generateFloor(seed, 0);
+      expect(lockedDoors(floor)).toHaveLength(0);
+      expect(keyRooms(floor)).toHaveLength(0);
+    }
+  });
+
+  it('au plus une porte verrouillée par étage, et il en existe', () => {
+    let found = 0;
+    for (const seed of MANY_SEEDS) {
+      for (const depth of DEPTHS) {
+        const count = lockedDoors(generateFloor(seed, depth)).length;
+        expect(count).toBeLessThanOrEqual(1);
+        found += count;
+      }
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+
+  it('invariant : la clé est atteignable sans franchir la porte verrouillée', () => {
+    for (const seed of MANY_SEEDS) {
+      for (const depth of DEPTHS) {
+        const floor = generateFloor(seed, depth);
+        const locked = lockedDoors(floor)[0];
+        if (!locked) continue;
+        expect(locked.keyItemId).not.toBeNull();
+        const rooms = keyRooms(floor);
+        expect(rooms).toHaveLength(1);
+        const reachable = reachableRooms(floor, locked.id);
+        expect(reachable.has(rooms[0]!.id)).toBe(true);
+      }
+    }
+  });
+
+  it('après déverrouillage, tout l’étage est atteignable', () => {
+    for (const seed of MANY_SEEDS) {
+      for (const depth of DEPTHS) {
+        const floor = generateFloor(seed, depth);
+        expect(reachableRooms(floor).size).toBe(Object.keys(floor.rooms).length);
+      }
+    }
+  });
+
+  it('la salle derrière la porte est récompensée : medkit garanti, munitions doublées', () => {
+    for (const seed of MANY_SEEDS) {
+      for (const depth of DEPTHS) {
+        const floor = generateFloor(seed, depth);
+        const locked = lockedDoors(floor)[0];
+        if (!locked) continue;
+        const startSide = reachableRooms(floor, locked.id);
+        const rewardId = startSide.has(locked.roomA) ? locked.roomB : locked.roomA;
+        const reward = floor.rooms[rewardId]!;
+        expect(reward.lootSpawns.filter((spawn) => spawn.kind === 'consumable').length)
+          .toBeGreaterThanOrEqual(1);
+        expect(reward.lootSpawns.filter((spawn) => spawn.kind === 'ammo').length)
+          .toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('l’invariant « au plus une relique par étage » tient aussi en profondeur', () => {
+    for (const seed of MANY_SEEDS) {
+      for (const depth of DEPTHS) {
+        const relics = Object.values(generateFloor(seed, depth).rooms)
+          .flatMap((room) => room.lootSpawns)
+          .filter((spawn) => spawn.kind === 'relic').length;
+        expect(relics).toBeLessThanOrEqual(1);
       }
     }
   });

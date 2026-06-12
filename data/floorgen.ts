@@ -58,6 +58,8 @@ export interface FloorGenConfig {
   medkitsPerRestRoom: number;
   /** Zones de vide par salle de combat (bornes incluses). */
   pitsPerCombatRoom: { min: number; max: number };
+  /** Porte verrouillée : au plus une par étage, repli « aucune » sur les graphes sans pont. */
+  lockedDoor: { minFloor: number; chance: number };
 }
 
 export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
@@ -93,4 +95,5 @@ export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
   relicLootChance: 0.5,
   medkitsPerRestRoom: 1,
   pitsPerCombatRoom: { min: 0, max: 2 },
+  lockedDoor: { minFloor: 1, chance: 0.6 },
 };

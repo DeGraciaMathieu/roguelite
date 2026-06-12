@@ -21,6 +21,7 @@ import type {
 } from '@/domain';
 import { WALL_THICKNESS } from '@/data/balance';
 import { MEDKIT_ID } from '@/data/consumables';
+import { FLOOR_KEY_ID } from '@/data/keys';
 import { RELIC_DEFS } from '@/data/relics';
 import { circleIntersectsRect } from './collision';
 import { DEFAULT_FLOOR_GEN } from '@/data/floorgen';
@@ -73,6 +74,37 @@ function layoutCells(rng: RngState, count: number): Cell[] {
 
 function cellBounds(cell: Cell, size: FloorGenConfig['roomSize']): Rect {
   return { x: cell.cx * size.w, y: cell.cy * size.h, w: size.w, h: size.h };
+}
+
+interface DoorEdge {
+  id: DoorId;
+  a: number;
+  b: number;
+}
+
+/** Salles atteignables depuis le start (index 0) en ignorant une arête. */
+function reachableWithoutEdge(
+  edges: readonly DoorEdge[],
+  roomCount: number,
+  excluded: DoorId,
+): Set<number> {
+  const adjacency: number[][] = Array.from({ length: roomCount }, () => []);
+  for (const edge of edges) {
+    if (edge.id === excluded) continue;
+    adjacency[edge.a]!.push(edge.b);
+    adjacency[edge.b]!.push(edge.a);
+  }
+  const seen = new Set<number>([0]);
+  const queue = [0];
+  for (let head = 0; head < queue.length; head += 1) {
+    for (const next of adjacency[queue[head]!] ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return seen;
 }
 
 function bfsDepths(adjacency: ReadonlyArray<readonly number[]>, start: number): number[] {
@@ -511,6 +543,7 @@ export function generateFloor(
   const doors: Record<DoorId, Door> = {};
   const doorIdsByRoom: DoorId[][] = cells.map(() => []);
   const adjacency: number[][] = cells.map(() => []);
+  const doorEdges: DoorEdge[] = [];
   let doorSeq = 0;
   for (let i = 0; i < cells.length; i += 1) {
     const cell = cells[i]!;
@@ -539,6 +572,7 @@ export function generateFloor(
       doorIdsByRoom[j]!.push(id);
       adjacency[i]!.push(j);
       adjacency[j]!.push(i);
+      doorEdges.push({ id, a: i, b: j });
     }
   }
 
@@ -579,6 +613,65 @@ export function generateFloor(
       cleared: enemySpawns.length === 0,
       discovered: i === 0,
     };
+  }
+
+  // --- Porte verrouillée + clé (au plus une par étage, dès l'étage 1) --------
+  // Contrainte forte : seuls les ponts du graphe sont verrouillables, et la
+  // clé est posée côté start (BFS privé de l'arête). L'étage reste donc
+  // finissable par construction : la clé est toujours atteignable, la porte
+  // toujours ouvrable. Repli : un graphe sans pont n'est pas verrouillé.
+  if (index >= config.lockedDoor.minFloor && nextFloat(rng) < config.lockedDoor.chance) {
+    const bridges = doorEdges.filter(
+      (edge) => reachableWithoutEdge(doorEdges, cells.length, edge.id).size < cells.length,
+    );
+    if (bridges.length > 0) {
+      const edge = pick(rng, bridges);
+      const startSide = reachableWithoutEdge(doorEdges, cells.length, edge.id);
+      const door = doors[edge.id]!;
+      door.locked = true;
+      door.keyItemId = FLOOR_KEY_ID;
+
+      // La clé, côté start — jamais dans la salle de départ si l'étage le permet.
+      const keyCandidates = [...startSide].filter((roomIndex) => roomIndex !== 0);
+      const keyRoomIndex = keyCandidates.length > 0 ? pick(rng, keyCandidates) : 0;
+      const keyRoom = rooms[roomIds[keyRoomIndex]!]!;
+      keyRoom.lootSpawns.push({
+        kind: 'key',
+        at: randomClearPoint(rng, keyRoom.bounds, [...keyRoom.obstacles, ...keyRoom.pits]),
+        defId: FLOOR_KEY_ID,
+      });
+
+      // Le détour doit payer : la salle juste derrière la porte est gâtée.
+      const rewardIndex = startSide.has(edge.a) ? edge.b : edge.a;
+      const rewardRoom = rooms[roomIds[rewardIndex]!]!;
+      const rewardBlocked = [...rewardRoom.obstacles, ...rewardRoom.pits];
+      for (let n = 0; n < 2; n += 1) {
+        const entry = pickWeighted(rng, config.ammoLoot);
+        rewardRoom.lootSpawns.push({
+          kind: 'ammo',
+          at: randomClearPoint(rng, rewardRoom.bounds, rewardBlocked),
+          // Munitions doublées par rapport à un drop normal.
+          amount: 2 * nextInt(rng, entry.amount.min, entry.amount.max),
+          ammo: entry.ammo,
+        });
+      }
+      rewardRoom.lootSpawns.push({
+        kind: 'consumable',
+        at: randomClearPoint(rng, rewardRoom.bounds, rewardBlocked),
+        defId: MEDKIT_ID,
+      });
+      // Relique en prime, seulement si l'étage n'en a pas déjà une (invariant ≤ 1).
+      const floorHasRelic = Object.values(rooms).some((room) =>
+        room.lootSpawns.some((spawn) => spawn.kind === 'relic'),
+      );
+      if (!floorHasRelic) {
+        rewardRoom.lootSpawns.push({
+          kind: 'relic',
+          at: randomClearPoint(rng, rewardRoom.bounds, rewardBlocked),
+          defId: pick(rng, RELIC_DEFS).id,
+        });
+      }
+    }
   }
 
   return {
