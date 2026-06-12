@@ -7,6 +7,7 @@ import type { WeaponDef, WeaponDefId, WeaponInstance } from '@/domain';
 
 export const HANDGUN_ID: WeaponDefId = asId<'WeaponDefId'>('handgun');
 export const SHOTGUN_ID: WeaponDefId = asId<'WeaponDefId'>('shotgun');
+export const RIFLE_ID: WeaponDefId = asId<'WeaponDefId'>('rifle');
 
 export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
   [HANDGUN_ID]: {
@@ -30,6 +31,19 @@ export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
     fireRateMs: 900,
     pellets: 6,
     spread: 0.35,
+  },
+  /** Précis et fort à distance ; cadence et chargeur faibles en contrepartie.
+   * 28 dégâts : one-shot un compy, 2 balles un raptor, 5 un théropode. */
+  [RIFLE_ID]: {
+    id: RIFLE_ID,
+    name: 'Rifle',
+    ammo: 'rifle',
+    damage: 28,
+    magazineSize: 5,
+    reloadMs: 1800,
+    fireRateMs: 700,
+    pellets: 1,
+    spread: 0,
   },
 };
 

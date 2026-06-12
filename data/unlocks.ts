@@ -5,7 +5,7 @@
 
 import { asId } from '@/domain';
 import type { UnlockId, WeaponDefId } from '@/domain';
-import { SHOTGUN_ID } from './weapons';
+import { RIFLE_ID, SHOTGUN_ID } from './weapons';
 
 export interface UnlockDef {
   id: UnlockId;
@@ -23,5 +23,12 @@ export const UNLOCK_DEFS: readonly UnlockDef[] = [
     description: '6 plombs par tir, recharge lente. Brutal de près.',
     cost: 150,
     weaponId: SHOTGUN_ID,
+  },
+  {
+    id: asId<'UnlockId'>('unlock-rifle'),
+    name: 'Fusil',
+    description: 'Précis et puissant à distance. Chargeur court, cadence lente.',
+    cost: 300,
+    weaponId: RIFLE_ID,
   },
 ];

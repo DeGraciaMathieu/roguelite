@@ -8,7 +8,7 @@ import {
   EXTRACTION_BONUS_MULTIPLIER,
 } from '@/data/balance';
 import { UNLOCK_DEFS } from '@/data/unlocks';
-import { HANDGUN_ID, SHOTGUN_ID } from '@/data/weapons';
+import { HANDGUN_ID, RIFLE_ID, SHOTGUN_ID } from '@/data/weapons';
 import {
   applyRunRewards,
   purchaseUnlock,
@@ -17,8 +17,9 @@ import {
   unlockedWeapons,
 } from './meta';
 
-const SHOTGUN_UNLOCK = UNLOCK_DEFS[0];
-if (!SHOTGUN_UNLOCK) throw new Error('Catalogue de déblocages vide');
+const SHOTGUN_UNLOCK = UNLOCK_DEFS.find((def) => def.weaponId === SHOTGUN_ID);
+const RIFLE_UNLOCK = UNLOCK_DEFS.find((def) => def.weaponId === RIFLE_ID);
+if (!SHOTGUN_UNLOCK || !RIFLE_UNLOCK) throw new Error('Catalogue de déblocages incomplet');
 
 function stats(overrides: Partial<RunStats> = {}): RunStats {
   return { floorsCleared: 2, kills: 8, deepestFloor: 2, startedAtMs: 0, ...overrides };
@@ -105,5 +106,18 @@ describe('loadout', () => {
 
   it('refuse une arme non débloquée', () => {
     expect(selectLoadoutWeapon(defaultMeta(HANDGUN_ID), SHOTGUN_ID)).toBeNull();
+    expect(selectLoadoutWeapon(defaultMeta(HANDGUN_ID), RIFLE_ID)).toBeNull();
+  });
+
+  it('débloque, propose et sélectionne le rifle', () => {
+    let meta = { ...defaultMeta(HANDGUN_ID), currency: RIFLE_UNLOCK.cost };
+
+    const purchased = purchaseUnlock(meta, RIFLE_UNLOCK);
+    expect(purchased).not.toBeNull();
+    meta = purchased!;
+
+    expect(meta.currency).toBe(0);
+    expect(unlockedWeapons(meta)).toEqual([HANDGUN_ID, RIFLE_ID]);
+    expect(selectLoadoutWeapon(meta, RIFLE_ID)?.loadout).toEqual({ weaponId: RIFLE_ID });
   });
 });

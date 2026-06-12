@@ -17,7 +17,7 @@ export const PLAYER_RADIUS = 12;
 export const PLAYER_MAX_HEALTH = 100;
 
 /** Réserve de départ par type de munitions (seule celle de l'arme équipée est servie). */
-export const START_AMMO: Record<AmmoType, number> = { handgun: 24, shotgun: 12, rifle: 0 };
+export const START_AMMO: Record<AmmoType, number> = { handgun: 24, shotgun: 12, rifle: 10 };
 
 /** Épaisseur des murs pleins entourant une salle. */
 export const WALL_THICKNESS = 16;

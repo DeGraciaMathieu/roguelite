@@ -86,6 +86,8 @@ export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
   ammoLoot: [
     { ammo: 'handgun', weight: 6, amount: { min: 6, max: 12 } },
     { ammo: 'shotgun', weight: 4, amount: { min: 3, max: 6 } },
+    // Rare et parcimonieux : cohérent avec la puissance du rifle.
+    { ammo: 'rifle', weight: 2, amount: { min: 4, max: 8 } },
   ],
   medkitLootChance: 0.4,
   relicLootChance: 0.5,
