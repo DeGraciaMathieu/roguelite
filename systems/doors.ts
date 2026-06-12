@@ -33,11 +33,20 @@ export function updateDoorTransition(state: RunState): void {
   const room = currentRoom(state);
   for (const doorId of room.doorIds) {
     const door = state.floor.doors[doorId];
-    if (!door || door.locked) continue;
+    if (!door) continue;
 
     const dx = state.player.pos.x - door.at.x;
     const dy = state.player.pos.y - door.at.y;
     if (dx * dx + dy * dy > DOOR_TRIGGER_RADIUS * DOOR_TRIGGER_RADIUS) continue;
+
+    if (door.locked) {
+      // Bonne clé portée → déverrouillage et passage immédiat (le détour est
+      // déjà payé). La clé reste en inventaire : elle meurt avec l'étage.
+      const hasKey =
+        door.keyItemId !== null && state.inventory.keyItems.includes(door.keyItemId);
+      if (!hasKey) continue;
+      door.locked = false;
+    }
 
     const targetId = door.roomA === room.id ? door.roomB : door.roomA;
     const target = state.floor.rooms[targetId];

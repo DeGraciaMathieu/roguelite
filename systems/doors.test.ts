@@ -85,4 +85,35 @@ describe('updateDoorTransition', () => {
 
     expect(state.floor.currentRoomId).toBe(startId);
   });
+
+  it('reste verrouillée sans la bonne clé en inventaire', () => {
+    const { state, door } = runAtStartDoor();
+    const startId = state.floor.currentRoomId;
+    door.locked = true;
+    door.keyItemId = asId<'ItemDefId'>('floor-key');
+    state.inventory.keyItems = [asId<'ItemDefId'>('autre-cle')];
+
+    state.player.pos = { ...door.at };
+    updateDoorTransition(state);
+
+    expect(state.floor.currentRoomId).toBe(startId);
+    expect(door.locked).toBe(true);
+  });
+
+  it('s’ouvre avec la bonne clé, laisse passer et reste ouverte', () => {
+    const { state, door } = runAtStartDoor();
+    const startId = state.floor.currentRoomId;
+    const expectedTarget = door.roomA === startId ? door.roomB : door.roomA;
+    door.locked = true;
+    door.keyItemId = asId<'ItemDefId'>('floor-key');
+    state.inventory.keyItems = [asId<'ItemDefId'>('floor-key')];
+
+    state.player.pos = { ...door.at };
+    updateDoorTransition(state);
+
+    expect(door.locked).toBe(false);
+    expect(state.floor.currentRoomId).toBe(expectedTarget);
+    // La clé d'étage n'est pas consommée (elle meurt avec l'étage).
+    expect(state.inventory.keyItems).toContain(asId<'ItemDefId'>('floor-key'));
+  });
 });

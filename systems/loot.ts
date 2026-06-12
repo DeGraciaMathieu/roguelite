@@ -56,7 +56,12 @@ export function updateLootPickup(state: RunState): void {
         acquireRelic(state, spawn.defId);
         return false;
       }
-      // Armes, clés : leurs systèmes n'existent pas encore.
+      case 'key': {
+        // Hors capacité, comme les reliques : un objet d'objectif, pas un slot.
+        state.inventory.keyItems.push(spawn.defId);
+        return false;
+      }
+      // Armes : leur système n'existe pas encore.
       default:
         return true;
     }

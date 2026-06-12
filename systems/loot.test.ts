@@ -85,14 +85,28 @@ describe('updateLootPickup', () => {
 
   it('laisse au sol les kinds non gérés', () => {
     const { state, room } = runWithLoot({
-      kind: 'key',
+      kind: 'weapon',
       at: AT_PLAYER,
-      defId: asId<'ItemDefId'>('test-key'),
+      defId: asId<'ItemDefId'>('test-weapon'),
     });
 
     updateLootPickup(state);
 
     expect(room.lootSpawns).toHaveLength(1);
+  });
+
+  it('ramasse une clé dans keyItems, hors capacité', () => {
+    const { state, room } = runWithLoot({
+      kind: 'key',
+      at: AT_PLAYER,
+      defId: asId<'ItemDefId'>('floor-key'),
+    });
+    state.inventory.consumables = [{ defId: MEDKIT_ID, count: state.inventory.capacity }];
+
+    updateLootPickup(state);
+
+    expect(state.inventory.keyItems).toEqual([asId<'ItemDefId'>('floor-key')]);
+    expect(room.lootSpawns).toHaveLength(0);
   });
 
   it('ramasse une relique : ajoutée à la run, retirée du sol, hors capacité', () => {
