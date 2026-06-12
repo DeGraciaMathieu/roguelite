@@ -620,7 +620,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         .rect(room.bounds.x, room.bounds.y, room.bounds.w, room.bounds.h)
         .fill({ color: COLOR_VEIL, alpha: VEIL_ALPHA });
       visionMaskGraphics.clear();
-      visionMaskGraphics.poly(visionPolygon(eye, player.aim)).fill(0xffffff);
+      visionMaskGraphics.poly(visionPolygon(eye, player.aim, room.obstacles)).fill(0xffffff);
 
       const equipped = renderState.inventory.weapons[renderState.inventory.equippedIndex];
       const equippedAmmo = equipped ? getWeaponDef(equipped.defId).ammo : 'handgun';
