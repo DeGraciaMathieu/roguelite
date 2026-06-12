@@ -81,14 +81,40 @@ describe('updateLootPickup', () => {
 
   it('laisse au sol les kinds non gérés', () => {
     const { state, room } = runWithLoot({
-      kind: 'relic',
+      kind: 'key',
       at: AT_PLAYER,
-      defId: asId<'RelicDefId'>('test-relic'),
+      defId: asId<'ItemDefId'>('test-key'),
     });
 
     updateLootPickup(state);
 
     expect(room.lootSpawns).toHaveLength(1);
+  });
+
+  it('ramasse une relique : ajoutée à la run, retirée du sol, hors capacité', () => {
+    const { state, room } = runWithLoot({
+      kind: 'relic',
+      at: AT_PLAYER,
+      defId: asId<'RelicDefId'>('crocs-sertis'),
+    });
+    // Inventaire de consommables plein : les reliques n'y comptent pas.
+    state.inventory.consumables = [{ defId: MEDKIT_ID, count: state.inventory.capacity }];
+
+    updateLootPickup(state);
+
+    expect(state.relics).toEqual([{ defId: asId<'RelicDefId'>('crocs-sertis') }]);
+    expect(room.lootSpawns).toHaveLength(0);
+  });
+
+  it('ammoDropMult multiplie les munitions ramassées', () => {
+    const { state, room } = runWithLoot({ kind: 'ammo', at: AT_PLAYER, ammo: 'handgun', amount: 8 });
+    state.relics = [{ defId: asId<'RelicDefId'>('pillard') }]; // ammoDropMult 1.5
+    const before = state.inventory.ammo.handgun;
+
+    updateLootPickup(state);
+
+    expect(state.inventory.ammo.handgun).toBe(before + 12);
+    expect(room.lootSpawns).toHaveLength(0);
   });
 
   it('ne ramasse que les objets à portée parmi plusieurs', () => {

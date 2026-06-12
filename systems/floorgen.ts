@@ -21,6 +21,7 @@ import type {
 } from '@/domain';
 import { WALL_THICKNESS } from '@/data/balance';
 import { MEDKIT_ID } from '@/data/consumables';
+import { RELIC_DEFS } from '@/data/relics';
 import { circleIntersectsRect } from './collision';
 import { DEFAULT_FLOOR_GEN } from '@/data/floorgen';
 import type { FloorGenConfig } from '@/data/floorgen';
@@ -474,6 +475,14 @@ function generateRoomLoot(
     }
     if (nextFloat(rng) < config.medkitLootChance) {
       spawns.push({ kind: 'consumable', at: randomClearPoint(rng, bounds, blocked), defId: MEDKIT_ID });
+    }
+    // Au plus une relique par étage : assignKinds ne pose qu'une salle loot.
+    if (nextFloat(rng) < config.relicLootChance) {
+      spawns.push({
+        kind: 'relic',
+        at: randomClearPoint(rng, bounds, blocked),
+        defId: pick(rng, RELIC_DEFS).id,
+      });
     }
   }
   if (kind === 'rest') {

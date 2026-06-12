@@ -280,6 +280,22 @@ describe('generateFloor — invariants structurels', () => {
     }
   });
 
+  it('au plus une relique par étage, toujours dans la salle loot', () => {
+    let found = 0;
+    for (const seed of MANY_SEEDS) {
+      const floor = generateFloor(seed);
+      let relics = 0;
+      for (const room of Object.values(floor.rooms)) {
+        const inRoom = room.lootSpawns.filter((spawn) => spawn.kind === 'relic').length;
+        if (inRoom > 0) expect(room.kind).toBe('loot');
+        relics += inRoom;
+      }
+      expect(relics).toBeLessThanOrEqual(1);
+      found += relics;
+    }
+    expect(found).toBeGreaterThan(0); // la chance configurée produit bien des reliques
+  });
+
   it.each(SEEDS)('seed %i : chaque salle rest contient ses medkits', (seed) => {
     const floor = generateFloor(seed);
     for (const room of Object.values(floor.rooms)) {

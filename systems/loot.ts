@@ -9,6 +9,7 @@ import type { Inventory, RunState } from '@/domain';
 import { LOOT_PICKUP_RADIUS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
 import { currentRoom } from './movement';
+import { acquireRelic, ammoDropMultiplier } from './relics';
 
 /** Total porté : `capacity` borne le nombre de consommables, pas de types. */
 export function consumableCount(inventory: Inventory): number {
@@ -34,7 +35,9 @@ export function updateLootPickup(state: RunState): void {
       case 'ammo': {
         // Sélectif : on ne ramasse que les munitions d'une arme portée.
         if (!carriedAmmoTypes.has(spawn.ammo)) return true;
-        state.inventory.ammo[spawn.ammo] += spawn.amount;
+        // Le multiplicateur s'applique au ramassage : il suit les reliques
+        // acquises en cours de run, pas l'état au moment de la génération.
+        state.inventory.ammo[spawn.ammo] += Math.round(spawn.amount * ammoDropMultiplier(state));
         return false;
       }
       case 'consumable': {
@@ -48,7 +51,12 @@ export function updateLootPickup(state: RunState): void {
         }
         return false;
       }
-      // Reliques, armes, clés : leurs systèmes n'existent pas encore.
+      case 'relic': {
+        // Les reliques ne comptent pas dans capacity : ramassage inconditionnel.
+        acquireRelic(state, spawn.defId);
+        return false;
+      }
+      // Armes, clés : leurs systèmes n'existent pas encore.
       default:
         return true;
     }
