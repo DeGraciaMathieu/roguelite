@@ -5,10 +5,21 @@
  * interpoler le rendu entre deux pas de simulation — le domaine reste pur.
  */
 
-import { Application, Container, Graphics, Sprite } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { healthState } from '@/domain';
-import type { AmmoType, Door, EnemyKind, EntityId, HealthState, Room, RunState, Vec2 } from '@/domain';
+import type {
+  Door,
+  EnemyKind,
+  EntityId,
+  HealthState,
+  LootSpawn,
+  Rect,
+  Room,
+  RunState,
+  Vec2,
+} from '@/domain';
 import { PROJECTILE_RADIUS, WALL_THICKNESS } from '@/data/balance';
+import { BANDAGE_ID } from '@/data/consumables';
 import { getWeaponDef } from '@/data/weapons';
 import { reloadDurationMultiplier } from '@/systems/relics';
 import { extractionAvailable, extractionZone, stairZone } from '@/systems/stairs';
@@ -25,34 +36,33 @@ import {
   tickEffects,
 } from './effects';
 import { drawMinimap } from './minimap';
-import { drawEnemyHealthBar, drawPlayerShape } from './shapes';
+import { drawEnemyHealthBar } from './shapes';
 import { isVisible, visionPolygon } from './visibility';
 import {
   SPRITE_FRAME_SIZE,
   SPRITE_ROTATION_OFFSET,
   SPRITE_VISUAL_SCALE,
-  loadEnemyTextures,
+  loadGameTextures,
 } from './sprites';
+import type { GameTextures } from './sprites';
 
-const COLOR_FLOOR = 0x1a1d22;
-const COLOR_WALL = 0x3a3f47;
-const COLOR_OBSTACLE = 0x2c313a;
-const COLOR_PIT = 0x050608;
-const COLOR_PIT_EDGE = 0x23262c;
-const COLOR_DOOR = 0x7a9e63;
-const COLOR_DOOR_LOCKED = 0x8a3030;
-const COLOR_KEY = 0xc9a44a;
-const COLOR_STAIRS = 0x5d7fa3;
-const COLOR_EXTRACTION = 0xc9a44a;
 const COLOR_PROJECTILE = 0xf0c33c;
 
-/** Couleur du joueur selon l'état de santé dérivé du domaine (pas de HUD). */
+/** Couleur du joueur selon l'état de santé (fantômes de dash). */
 const COLOR_PLAYER_BY_HEALTH: Record<HealthState, number> = {
   fine: 0xd8e1e8,
   caution: 0xf0c33c,
   danger: 0xe5533d,
 };
 
+/** Teinte du sprite joueur : reprend le code couleur santé du disque d'avant. */
+const PLAYER_TINT_BY_HEALTH: Record<HealthState, number> = {
+  fine: 0xffffff,
+  caution: 0xf0c33c,
+  danger: 0xe5533d,
+};
+
+/** Couleurs par espèce : anneaux de mort et étincelles (les corps sont des sprites). */
 const COLOR_ENEMY: Record<EnemyKind, number> = {
   raptor: 0xc0563e,
   compy: 0x9bbf65,
@@ -60,18 +70,14 @@ const COLOR_ENEMY: Record<EnemyKind, number> = {
   boss: 0xb03060,
 };
 
-/** Même violet que le théropode : la famille « relique/menace rare » se lit d'un coup d'œil. */
-const COLOR_RELIC = 0x8a5fb0;
-
-const COLOR_AMMO_LOOT: Record<AmmoType, number> = {
-  handgun: 0xf0c33c,
-  shotgun: 0xe07b39,
-  rifle: 0x9bd0d0,
-};
-const LOOT_DRAW_W = 12;
-const LOOT_DRAW_H = 8;
+/** Côté monde des icônes de loot (les PNG font 32 px). */
+const LOOT_DRAW_SIZE = 18;
 
 const DOOR_DRAW_WIDTH = 64;
+/** Au-delà du double de côté, un obstacle est une étagère/cloison, pas une caisse. */
+const ELONGATED_RATIO = 2;
+/** Côté à partir duquel un obstacle carré est un pilier plutôt qu'une caisse. */
+const PILLAR_MIN_SIDE = 48;
 
 /** Voile de vision limitée : obscurité partielle, le décor reste deviné. */
 const COLOR_VEIL = 0x050608;
@@ -120,50 +126,109 @@ function roomDoors(state: RunState, room: Room): Door[] {
     .filter((door): door is Door => door !== undefined);
 }
 
-function drawDoor(graphics: Graphics, door: Door, room: Room): void {
+/** Rect couvert d'une texture répétée (sols, murs, fosses). */
+function addTiling(layer: Container, texture: Texture, rect: Rect): void {
+  layer.addChild(new TilingSprite({ texture, x: rect.x, y: rect.y, width: rect.w, height: rect.h }));
+}
+
+/** Rect couvert d'une texture étirée (props et zones de taille connue). */
+function addStretched(layer: Container, texture: Texture, rect: Rect): void {
+  const sprite = new Sprite(texture);
+  sprite.position.set(rect.x, rect.y);
+  sprite.width = rect.w;
+  sprite.height = rect.h;
+  layer.addChild(sprite);
+}
+
+/**
+ * Les obstacles du domaine sont des rects anonymes : la texture se choisit
+ * par heuristique de forme — allongé = étagère/cloison, gros carré = pilier,
+ * petit = caisse. Render-only : le domaine n'a pas à connaître son mobilier.
+ */
+function addObstacle(layer: Container, textures: GameTextures, rect: Rect): void {
+  const long = Math.max(rect.w, rect.h);
+  const short = Math.min(rect.w, rect.h);
+  if (long >= short * ELONGATED_RATIO) {
+    const shelf = textures.props.shelf;
+    if (rect.w >= rect.h) {
+      const strip = new TilingSprite({ texture: shelf, x: rect.x, y: rect.y, width: rect.w, height: rect.h });
+      strip.tileScale.set(rect.h / shelf.height);
+      layer.addChild(strip);
+    } else {
+      // Bande verticale : la même texture, tournée de 90° autour du coin haut-gauche.
+      const strip = new TilingSprite({ texture: shelf, width: rect.h, height: rect.w });
+      strip.tileScale.set(rect.w / shelf.height);
+      strip.rotation = Math.PI / 2;
+      strip.position.set(rect.x + rect.w, rect.y);
+      layer.addChild(strip);
+    }
+    return;
+  }
+  addStretched(layer, long >= PILLAR_MIN_SIDE ? textures.props.pillar : textures.props.crate, rect);
+}
+
+function addDoor(layer: Container, textures: GameTextures, door: Door, room: Room): void {
   const b = room.bounds;
-  const color = door.locked ? COLOR_DOOR_LOCKED : COLOR_DOOR;
+  const sprite = new Sprite(door.locked ? textures.doors.locked : textures.doors.unlocked);
+  sprite.width = DOOR_DRAW_WIDTH;
+  sprite.height = WALL_THICKNESS;
   const onVerticalWall = Math.abs(door.at.x - b.x) < 1 || Math.abs(door.at.x - (b.x + b.w)) < 1;
   if (onVerticalWall) {
     const x = Math.abs(door.at.x - b.x) < 1 ? b.x : b.x + b.w - WALL_THICKNESS;
-    graphics.rect(x, door.at.y - DOOR_DRAW_WIDTH / 2, WALL_THICKNESS, DOOR_DRAW_WIDTH).fill(color);
+    sprite.rotation = Math.PI / 2;
+    sprite.position.set(x + WALL_THICKNESS, door.at.y - DOOR_DRAW_WIDTH / 2);
   } else {
     const y = Math.abs(door.at.y - b.y) < 1 ? b.y : b.y + b.h - WALL_THICKNESS;
-    graphics.rect(door.at.x - DOOR_DRAW_WIDTH / 2, y, DOOR_DRAW_WIDTH, WALL_THICKNESS).fill(color);
+    sprite.position.set(door.at.x - DOOR_DRAW_WIDTH / 2, y);
+  }
+  layer.addChild(sprite);
+}
+
+/** (Re)construit la couche statique d'une salle : tuiles, props, portes, zones. */
+function buildRoom(
+  layer: Container,
+  textures: GameTextures,
+  room: Room,
+  doors: readonly Door[],
+  canExtract: boolean,
+): void {
+  for (const child of layer.removeChildren()) child.destroy();
+  const { x, y, w, h } = room.bounds;
+  addTiling(layer, textures.tiles.wall, room.bounds);
+  addTiling(layer, textures.tiles.floor, {
+    x: x + WALL_THICKNESS,
+    y: y + WALL_THICKNESS,
+    w: w - 2 * WALL_THICKNESS,
+    h: h - 2 * WALL_THICKNESS,
+  });
+  for (const obstacle of room.obstacles) addObstacle(layer, textures, obstacle);
+  for (const pit of room.pits) addTiling(layer, textures.tiles.pit, pit);
+  for (const door of doors) addDoor(layer, textures, door, room);
+  if (room.kind === 'exit') {
+    addStretched(layer, textures.zones.stairs, stairZone(room));
+    if (canExtract) addStretched(layer, textures.zones.extraction, extractionZone(room));
   }
 }
 
-function drawRoom(graphics: Graphics, room: Room, doors: readonly Door[], canExtract: boolean): void {
-  const { x, y, w, h } = room.bounds;
-  graphics.rect(x, y, w, h).fill(COLOR_WALL);
-  graphics
-    .rect(x + WALL_THICKNESS, y + WALL_THICKNESS, w - 2 * WALL_THICKNESS, h - 2 * WALL_THICKNESS)
-    .fill(COLOR_FLOOR);
-  for (const obstacle of room.obstacles) {
-    graphics.rect(obstacle.x, obstacle.y, obstacle.w, obstacle.h).fill(COLOR_OBSTACLE);
-  }
-  for (const pit of room.pits) {
-    graphics
-      .rect(pit.x, pit.y, pit.w, pit.h)
-      .fill(COLOR_PIT)
-      .stroke({ width: 1, color: COLOR_PIT_EDGE });
-  }
-  for (const door of doors) {
-    drawDoor(graphics, door, room);
-  }
-  if (room.kind === 'exit') {
-    const stairs = stairZone(room);
-    graphics.rect(stairs.x, stairs.y, stairs.w, stairs.h).fill(COLOR_STAIRS);
-    if (canExtract) {
-      const extraction = extractionZone(room);
-      graphics.rect(extraction.x, extraction.y, extraction.w, extraction.h).fill(COLOR_EXTRACTION);
-    }
+function lootTexture(textures: GameTextures, spawn: LootSpawn): Texture {
+  switch (spawn.kind) {
+    case 'ammo':
+      return textures.loot.ammo[spawn.ammo];
+    case 'consumable':
+      return spawn.defId === BANDAGE_ID ? textures.loot.bandage : textures.loot.medkit;
+    case 'relic':
+      return textures.loot.relic;
+    case 'key':
+      return textures.loot.key;
+    // Armes au sol : jamais générées pour l'instant.
+    case 'weapon':
+      return Texture.WHITE;
   }
 }
 
 export async function createRenderer(state: RunState): Promise<Renderer> {
   let viewRoom = currentRoom(state);
-  const enemyTextures = await loadEnemyTextures();
+  const textures = await loadGameTextures();
 
   const app = new Application();
   await app.init({
@@ -179,13 +244,16 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   app.stage.addChild(world);
   world.position.set(-viewRoom.bounds.x, -viewRoom.bounds.y);
 
-  const roomGraphics = new Graphics();
-  drawRoom(roomGraphics, viewRoom, roomDoors(state, viewRoom), extractionAvailable(state.floor));
-  world.addChild(roomGraphics);
+  const roomLayer = new Container();
+  buildRoom(roomLayer, textures, viewRoom, roomDoors(state, viewRoom), extractionAvailable(state.floor));
+  world.addChild(roomLayer);
 
-  // Couche dynamique : le loot disparaît au ramassage, on le redessine par frame.
-  const lootGraphics = new Graphics();
-  world.addChild(lootGraphics);
+  // Loot en sprites : reconstruit quand la salle ou le nombre d'objets change
+  // (ramassage) ; la visibilité par objet, elle, se règle à chaque frame.
+  const lootLayer = new Container();
+  world.addChild(lootLayer);
+  let lootRoomKey = '';
+  let lootSprites: Sprite[] = [];
 
   // Sprites des dinosaures, un par ennemi vivant de la salle courante ;
   // enemyGraphics ne dessine plus que leurs barres de vie.
@@ -213,6 +281,12 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
 
   const projectileGraphics = new Graphics();
   world.addChild(projectileGraphics);
+
+  // Sprite du joueur (texture selon l'arme équipée) ; playerGraphics ne
+  // dessine plus que la barre de recharge au-dessus de sa tête.
+  const playerSprite = new Sprite(textures.player.handgun);
+  playerSprite.anchor.set(0.5);
+  world.addChild(playerSprite);
 
   const playerGraphics = new Graphics();
   world.addChild(playerGraphics);
@@ -438,8 +512,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       if (room.id !== viewRoom.id) {
         viewRoom = room;
         world.position.set(-room.bounds.x, -room.bounds.y);
-        roomGraphics.clear();
-        drawRoom(roomGraphics, room, roomDoors(renderState, room), extractionAvailable(renderState.floor));
+        buildRoom(roomLayer, textures, room, roomDoors(renderState, room), extractionAvailable(renderState.floor));
         // Changement de salle = téléportation : on n'interpole pas par-dessus.
         prevPlayerPos = { ...renderState.player.pos };
       }
@@ -469,34 +542,26 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       /** Œil du joueur (position rendue) : centre du voile et des raycasts de visibilité. */
       const eye: Vec2 = { x, y };
 
-      lootGraphics.clear();
-      for (const spawn of room.lootSpawns) {
-        // Le loot ne se révèle qu'à portée de vue (halo/cône + ligne dégagée).
-        if (!isVisible(eye, player.aim, spawn.at, room.obstacles)) continue;
-        if (spawn.kind === 'ammo') {
-          lootGraphics
-            .rect(spawn.at.x - LOOT_DRAW_W / 2, spawn.at.y - LOOT_DRAW_H / 2, LOOT_DRAW_W, LOOT_DRAW_H)
-            .fill(COLOR_AMMO_LOOT[spawn.ammo]);
-        } else if (spawn.kind === 'consumable') {
-          // Medkit : carré blanc à croix rouge.
-          lootGraphics.rect(spawn.at.x - 7, spawn.at.y - 7, 14, 14).fill(0xd8e1e8);
-          lootGraphics.rect(spawn.at.x - 5, spawn.at.y - 1.5, 10, 3).fill(0xe5533d);
-          lootGraphics.rect(spawn.at.x - 1.5, spawn.at.y - 5, 3, 10).fill(0xe5533d);
-        } else if (spawn.kind === 'relic') {
-          // Relique : losange violet.
-          lootGraphics
-            .poly([
-              { x: spawn.at.x, y: spawn.at.y - 10 },
-              { x: spawn.at.x + 7, y: spawn.at.y },
-              { x: spawn.at.x, y: spawn.at.y + 10 },
-              { x: spawn.at.x - 7, y: spawn.at.y },
-            ])
-            .fill(COLOR_RELIC);
-        } else if (spawn.kind === 'key') {
-          // Clé : petit « L » doré.
-          lootGraphics.rect(spawn.at.x - 6, spawn.at.y - 7, 4, 14).fill(COLOR_KEY);
-          lootGraphics.rect(spawn.at.x - 2, spawn.at.y + 3, 8, 4).fill(COLOR_KEY);
-        }
+      // Sprites de loot : reconstruits à chaque salle ou ramassage.
+      const stateLootKey = `${room.id}:${room.lootSpawns.length}`;
+      if (stateLootKey !== lootRoomKey) {
+        lootRoomKey = stateLootKey;
+        for (const child of lootLayer.removeChildren()) child.destroy();
+        lootSprites = room.lootSpawns.map((spawn) => {
+          const sprite = new Sprite(lootTexture(textures, spawn));
+          sprite.anchor.set(0.5);
+          sprite.position.set(spawn.at.x, spawn.at.y);
+          sprite.scale.set(LOOT_DRAW_SIZE / sprite.texture.width);
+          lootLayer.addChild(sprite);
+          return sprite;
+        });
+      }
+      // Le loot ne se révèle qu'à portée de vue (halo/cône + ligne dégagée).
+      for (let i = 0; i < room.lootSpawns.length; i += 1) {
+        const spawn = room.lootSpawns[i];
+        const sprite = lootSprites[i];
+        if (!spawn || !sprite) continue;
+        sprite.visible = isVisible(eye, player.aim, spawn.at, room.obstacles);
       }
 
       enemyGraphics.clear();
@@ -512,7 +577,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
           continue;
         }
         if (!sprite) {
-          sprite = new Sprite(enemyTextures[enemy.kind]);
+          sprite = new Sprite(textures.enemies[enemy.kind]);
           sprite.anchor.set(0.5);
           enemyLayer.addChild(sprite);
           enemySprites.set(enemy.id, sprite);
@@ -558,16 +623,18 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       visionMaskGraphics.poly(visionPolygon(eye, player.aim)).fill(0xffffff);
 
       const equipped = renderState.inventory.weapons[renderState.inventory.equippedIndex];
-      playerGraphics.clear();
-      drawPlayerShape(
-        playerGraphics,
-        x,
-        y,
-        player.radius,
-        player.aim,
-        COLOR_PLAYER_BY_HEALTH[healthState(player.health)],
-        equipped ? getWeaponDef(equipped.defId).ammo : 'handgun',
+      const equippedAmmo = equipped ? getWeaponDef(equipped.defId).ammo : 'handgun';
+      playerSprite.texture = textures.player[equippedAmmo];
+      playerSprite.position.set(x, y);
+      // Le sprite regarde vers le haut : même offset de rotation que les dinos.
+      playerSprite.rotation = player.aim + SPRITE_ROTATION_OFFSET;
+      playerSprite.scale.set(
+        (player.radius * 2 * SPRITE_VISUAL_SCALE) / playerSprite.texture.width,
       );
+      // L'état de santé teinte le sprite (l'équivalent du disque coloré d'avant).
+      playerSprite.tint = PLAYER_TINT_BY_HEALTH[healthState(player.health)];
+
+      playerGraphics.clear();
 
       // Barre de progression de recharge au-dessus de la tête, le temps de la recharge.
       if (equipped && equipped.reloadingUntilMs !== null) {
