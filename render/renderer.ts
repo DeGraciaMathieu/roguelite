@@ -5,9 +5,9 @@
  * interpoler le rendu entre deux pas de simulation — le domaine reste pur.
  */
 
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { healthState } from '@/domain';
-import type { AmmoType, Door, EnemyKind, HealthState, Room, RunState, Vec2 } from '@/domain';
+import type { AmmoType, Door, EnemyKind, EntityId, HealthState, Room, RunState, Vec2 } from '@/domain';
 import { PROJECTILE_RADIUS, WALL_THICKNESS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
 import { reloadDurationMultiplier } from '@/systems/relics';
@@ -24,6 +24,13 @@ import {
   tickEffects,
 } from './effects';
 import { drawMinimap } from './minimap';
+import { drawEnemyHealthBar, drawPlayerShape } from './shapes';
+import {
+  SPRITE_FRAME_SIZE,
+  SPRITE_ROTATION_OFFSET,
+  SPRITE_VISUAL_SCALE,
+  loadEnemyTextures,
+} from './sprites';
 
 const COLOR_FLOOR = 0x1a1d22;
 const COLOR_WALL = 0x3a3f47;
@@ -33,9 +40,7 @@ const COLOR_PIT_EDGE = 0x23262c;
 const COLOR_DOOR = 0x7a9e63;
 const COLOR_STAIRS = 0x5d7fa3;
 const COLOR_EXTRACTION = 0xc9a44a;
-const COLOR_AIM = 0xe5533d;
 const COLOR_PROJECTILE = 0xf0c33c;
-const COLOR_FACING = 0x14161a;
 
 /** Couleur du joueur selon l'état de santé dérivé du domaine (pas de HUD). */
 const COLOR_PLAYER_BY_HEALTH: Record<HealthState, number> = {
@@ -62,10 +67,11 @@ const COLOR_AMMO_LOOT: Record<AmmoType, number> = {
 const LOOT_DRAW_W = 12;
 const LOOT_DRAW_H = 8;
 
-const AIM_INDICATOR_LENGTH = 22;
 const DOOR_DRAW_WIDTH = 64;
 
-const COLOR_ENEMY_FLASH = 0xffffff;
+/** Teinte multiplicative du flash d'impact (un sprite ne peut pas « blanchir »). */
+const ENEMY_FLASH_TINT = 0xff6b6b;
+const NO_TINT = 0xffffff;
 const COLOR_DAMAGE_VIGNETTE = 0xe5533d;
 const DAMAGE_VIGNETTE_THICKNESS = 26;
 const DAMAGE_VIGNETTE_MAX_ALPHA = 0.4;
@@ -145,6 +151,7 @@ function drawRoom(graphics: Graphics, room: Room, doors: readonly Door[], canExt
 
 export async function createRenderer(state: RunState): Promise<Renderer> {
   let viewRoom = currentRoom(state);
+  const enemyTextures = await loadEnemyTextures();
 
   const app = new Application();
   await app.init({
@@ -167,6 +174,12 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   // Couche dynamique : le loot disparaît au ramassage, on le redessine par frame.
   const lootGraphics = new Graphics();
   world.addChild(lootGraphics);
+
+  // Sprites des dinosaures, un par ennemi vivant de la salle courante ;
+  // enemyGraphics ne dessine plus que leurs barres de vie.
+  const enemyLayer = new Container();
+  world.addChild(enemyLayer);
+  const enemySprites = new Map<EntityId, Sprite>();
 
   const enemyGraphics = new Graphics();
   world.addChild(enemyGraphics);
@@ -434,21 +447,45 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
 
       enemyGraphics.clear();
       for (const enemy of Object.values(renderState.enemies)) {
-        if (!inRoomBounds(room, enemy.pos.x, enemy.pos.y)) continue;
-        // Impact tout frais : l'ennemi blanchit le temps du flash.
+        if (!inRoomBounds(room, enemy.pos.x, enemy.pos.y)) {
+          continue;
+        }
+        let sprite = enemySprites.get(enemy.id);
+        if (!sprite) {
+          sprite = new Sprite(enemyTextures[enemy.kind]);
+          sprite.anchor.set(0.5);
+          enemyLayer.addChild(sprite);
+          enemySprites.set(enemy.id, sprite);
+        }
+        const scale = (enemy.radius * 2 * SPRITE_VISUAL_SCALE) / SPRITE_FRAME_SIZE;
+        sprite.position.set(enemy.pos.x, enemy.pos.y);
+        // Le museau suit le facing (sprites top-down symétriques, pas de flip).
+        sprite.rotation = enemy.facing + SPRITE_ROTATION_OFFSET;
+        sprite.scale.set(scale);
+        // Impact tout frais : teinte rouge le temps du flash.
         const flashUntil = enemyFlashUntil.get(enemy.id);
         const flashing = flashUntil !== undefined && now < flashUntil;
         if (flashUntil !== undefined && !flashing) enemyFlashUntil.delete(enemy.id);
-        enemyGraphics
-          .circle(enemy.pos.x, enemy.pos.y, enemy.radius)
-          .fill(flashing ? COLOR_ENEMY_FLASH : COLOR_ENEMY[enemy.kind]);
-        enemyGraphics
-          .moveTo(enemy.pos.x, enemy.pos.y)
-          .lineTo(
-            enemy.pos.x + Math.cos(enemy.facing) * enemy.radius,
-            enemy.pos.y + Math.sin(enemy.facing) * enemy.radius,
-          )
-          .stroke({ width: 2, color: COLOR_FACING });
+        sprite.tint = flashing ? ENEMY_FLASH_TINT : NO_TINT;
+        // Barre de vie : seulement sur les blessés, zéro bruit au repos.
+        if (enemy.health.current < enemy.health.max) {
+          // Rayon visuel : la barre se cale au-dessus du sprite agrandi.
+          drawEnemyHealthBar(
+            enemyGraphics,
+            enemy.pos.x,
+            enemy.pos.y,
+            enemy.radius * SPRITE_VISUAL_SCALE,
+            enemy.health.current / enemy.health.max,
+          );
+        }
+      }
+      // Sprites orphelins (mort, hors salle) : retirés de la scène.
+      for (const [id, sprite] of enemySprites) {
+        const enemy = renderState.enemies[id];
+        if (!enemy || !inRoomBounds(room, enemy.pos.x, enemy.pos.y)) {
+          sprite.destroy();
+          enemySprites.delete(id);
+        }
       }
 
       const player = renderState.player;
@@ -456,17 +493,14 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       const y = prevPlayerPos.y + (player.pos.y - prevPlayerPos.y) * alpha;
 
       playerGraphics.clear();
-      playerGraphics.circle(x, y, player.radius).fill(COLOR_PLAYER_BY_HEALTH[healthState(player.health)]);
-
-      const aimStartX = x + Math.cos(player.aim) * player.radius;
-      const aimStartY = y + Math.sin(player.aim) * player.radius;
-      playerGraphics
-        .moveTo(aimStartX, aimStartY)
-        .lineTo(
-          aimStartX + Math.cos(player.aim) * AIM_INDICATOR_LENGTH,
-          aimStartY + Math.sin(player.aim) * AIM_INDICATOR_LENGTH,
-        )
-        .stroke({ width: 2, color: COLOR_AIM });
+      drawPlayerShape(
+        playerGraphics,
+        x,
+        y,
+        player.radius,
+        player.aim,
+        COLOR_PLAYER_BY_HEALTH[healthState(player.health)],
+      );
 
       // Barre de progression de recharge au-dessus de la tête, le temps de la recharge.
       const weapon = renderState.inventory.weapons[renderState.inventory.equippedIndex];
