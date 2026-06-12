@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { RunState } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
 import { createDebugRun } from '@/data/debugRoom';
-import { CONSUMABLE_DEFS, MEDKIT_ID } from '@/data/consumables';
+import { BANDAGE_ID, CONSUMABLE_DEFS, MEDKIT_ID } from '@/data/consumables';
 import { updateConsumables } from './consumables';
+import { applyBleed, isBleeding } from './status';
 
 const MEDKIT_DEF = CONSUMABLE_DEFS[MEDKIT_ID];
 if (!MEDKIT_DEF || MEDKIT_DEF.effect.kind !== 'heal') throw new Error('Def medkit invalide');
@@ -77,5 +78,51 @@ describe('updateConsumables', () => {
     updateConsumables(state, useIntent());
 
     expect(state.player.health.current).toBe(40);
+  });
+});
+
+describe('updateConsumables — bandage', () => {
+  it('purge le saignement et consomme le bandage', () => {
+    const state = runWithMedkits(0, 40);
+    state.inventory.consumables = [{ defId: BANDAGE_ID, count: 2 }];
+    applyBleed(state.player, 8000, 2);
+
+    updateConsumables(state, useIntent());
+
+    expect(isBleeding(state.player)).toBe(false);
+    expect(state.inventory.consumables[0]?.count).toBe(1);
+    expect(state.player.health.current).toBe(40); // un bandage ne soigne pas
+  });
+
+  it('en saignant avec bandage et medkit, le bandage passe en premier', () => {
+    const state = runWithMedkits(1, 40);
+    state.inventory.consumables.push({ defId: BANDAGE_ID, count: 1 });
+    applyBleed(state.player, 8000, 2);
+
+    updateConsumables(state, useIntent());
+
+    expect(isBleeding(state.player)).toBe(false);
+    expect(state.player.health.current).toBe(40); // le medkit n'a pas servi
+    expect(state.inventory.consumables).toEqual([{ defId: MEDKIT_ID, count: 1 }]);
+  });
+
+  it('sans saignement, le bandage n’est pas consommé — le soin prend la main', () => {
+    const state = runWithMedkits(1, 40);
+    state.inventory.consumables.unshift({ defId: BANDAGE_ID, count: 1 });
+
+    updateConsumables(state, useIntent());
+
+    expect(state.player.health.current).toBe(40 + HEAL_AMOUNT);
+    expect(state.inventory.consumables[0]).toEqual({ defId: BANDAGE_ID, count: 1 });
+  });
+
+  it('un medkit ne purge pas le saignement', () => {
+    const state = runWithMedkits(1, 40);
+    applyBleed(state.player, 8000, 2);
+
+    updateConsumables(state, useIntent());
+
+    expect(state.player.health.current).toBe(40 + HEAL_AMOUNT);
+    expect(isBleeding(state.player)).toBe(true);
   });
 });

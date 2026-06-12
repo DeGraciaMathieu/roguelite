@@ -20,7 +20,7 @@ import type {
   Vec2,
 } from '@/domain';
 import { WALL_THICKNESS } from '@/data/balance';
-import { MEDKIT_ID } from '@/data/consumables';
+import { BANDAGE_ID, MEDKIT_ID } from '@/data/consumables';
 import { FLOOR_KEY_ID } from '@/data/keys';
 import { RELIC_DEFS } from '@/data/relics';
 import { circleIntersectsRect } from './collision';
@@ -507,6 +507,9 @@ function generateRoomLoot(
     }
     if (nextFloat(rng) < config.medkitLootChance) {
       spawns.push({ kind: 'consumable', at: randomClearPoint(rng, bounds, blocked), defId: MEDKIT_ID });
+    }
+    if (nextFloat(rng) < config.bandageLootChance) {
+      spawns.push({ kind: 'consumable', at: randomClearPoint(rng, bounds, blocked), defId: BANDAGE_ID });
     }
     // Au plus une relique par étage : assignKinds ne pose qu'une salle loot.
     if (nextFloat(rng) < config.relicLootChance) {

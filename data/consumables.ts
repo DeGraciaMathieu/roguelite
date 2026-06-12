@@ -7,12 +7,18 @@ import { asId } from '@/domain';
 import type { ConsumableDef, ItemDefId } from '@/domain';
 
 export const MEDKIT_ID: ItemDefId = asId<'ItemDefId'>('medkit');
+export const BANDAGE_ID: ItemDefId = asId<'ItemDefId'>('bandage');
 
 export const CONSUMABLE_DEFS: Record<ItemDefId, ConsumableDef> = {
   [MEDKIT_ID]: {
     id: MEDKIT_ID,
     name: 'Medikit',
     effect: { kind: 'heal', amount: 50 },
+  },
+  [BANDAGE_ID]: {
+    id: BANDAGE_ID,
+    name: 'Bandage',
+    effect: { kind: 'cure', status: 'bleed' },
   },
 };
 

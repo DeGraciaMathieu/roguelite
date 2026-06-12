@@ -52,6 +52,8 @@ export interface FloorGenConfig {
   ammoLoot: readonly AmmoLootEntry[];
   /** Chance qu'une salle loot contienne un medkit en plus des munitions. */
   medkitLootChance: number;
+  /** Chance qu'une salle loot contienne un bandage (soigne le saignement). */
+  bandageLootChance: number;
   /** Chance que la salle loot contienne une relique (au plus une par étage). */
   relicLootChance: number;
   /** Medkits posés dans chaque salle rest (sa raison d'être). */
@@ -92,6 +94,7 @@ export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
     { ammo: 'rifle', weight: 2, amount: { min: 4, max: 8 } },
   ],
   medkitLootChance: 0.4,
+  bandageLootChance: 0.35,
   relicLootChance: 0.5,
   medkitsPerRestRoom: 1,
   pitsPerCombatRoom: { min: 0, max: 2 },
