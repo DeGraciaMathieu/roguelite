@@ -30,11 +30,11 @@ export const RAPTOR_PACK = {
 } as const;
 
 export const ENEMY_ARCHETYPES: Record<EnemyKind, EnemyArchetype> = {
-  /** Plus rapide que le joueur : fuir ne suffit pas, il faut tirer. */
+  /** Légèrement plus rapide que le joueur : fuir ne suffit pas, il faut tirer. */
   raptor: {
     maxHealth: 30,
     radius: 14,
-    moveSpeed: 260,
+    moveSpeed: 235,
     aggroRadius: 260,
     attackRange: 6,
     attackDamage: 15,
