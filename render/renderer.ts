@@ -10,6 +10,7 @@ import { healthState } from '@/domain';
 import type { AmmoType, Door, EnemyKind, HealthState, Room, RunState, Vec2 } from '@/domain';
 import { PROJECTILE_RADIUS, WALL_THICKNESS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
+import { reloadDurationMultiplier } from '@/systems/relics';
 import { extractionAvailable, extractionZone, stairZone } from '@/systems/stairs';
 import { drawMinimap } from './minimap';
 
@@ -38,6 +39,9 @@ const COLOR_ENEMY: Record<EnemyKind, number> = {
   theropode: 0x8a5fb0,
   boss: 0xb03060,
 };
+
+/** Même violet que le théropode : la famille « relique/menace rare » se lit d'un coup d'œil. */
+const COLOR_RELIC = 0x8a5fb0;
 
 const COLOR_AMMO_LOOT: Record<AmmoType, number> = {
   handgun: 0xf0c33c,
@@ -200,6 +204,16 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
           lootGraphics.rect(spawn.at.x - 7, spawn.at.y - 7, 14, 14).fill(0xd8e1e8);
           lootGraphics.rect(spawn.at.x - 5, spawn.at.y - 1.5, 10, 3).fill(0xe5533d);
           lootGraphics.rect(spawn.at.x - 1.5, spawn.at.y - 5, 3, 10).fill(0xe5533d);
+        } else if (spawn.kind === 'relic') {
+          // Relique : losange violet.
+          lootGraphics
+            .poly([
+              { x: spawn.at.x, y: spawn.at.y - 10 },
+              { x: spawn.at.x + 7, y: spawn.at.y },
+              { x: spawn.at.x, y: spawn.at.y + 10 },
+              { x: spawn.at.x - 7, y: spawn.at.y },
+            ])
+            .fill(COLOR_RELIC);
         }
       }
 
@@ -239,7 +253,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       // Barre de progression de recharge au-dessus de la tête, le temps de la recharge.
       const weapon = renderState.inventory.weapons[renderState.inventory.equippedIndex];
       if (weapon && weapon.reloadingUntilMs !== null) {
-        const reloadMs = getWeaponDef(weapon.defId).reloadMs;
+        const reloadMs = getWeaponDef(weapon.defId).reloadMs * reloadDurationMultiplier(renderState);
         const progress = Math.min(
           1,
           Math.max(0, 1 - (weapon.reloadingUntilMs - renderState.elapsedMs) / reloadMs),
