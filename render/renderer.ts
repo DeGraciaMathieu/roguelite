@@ -104,6 +104,29 @@ const RELOAD_BAR_OFFSET = 12;
 const COLOR_RELOAD_BAR_BG = 0x14161a;
 const COLOR_RELOAD_BAR = 0xf0c33c;
 
+// Réticule de visée : crosshair en espace écran qui suit la souris.
+const RETICLE_COLOR = 0xf0c33c;
+const RETICLE_RING_RADIUS = 9;
+const RETICLE_GAP = 4;
+const RETICLE_TICK = 5;
+const RETICLE_THICKNESS = 1.5;
+
+/** Dessine un crosshair (anneau + quatre traits cardinaux) centré sur (x, y). */
+function drawReticle(g: Graphics, x: number, y: number): void {
+  g.clear();
+  g.circle(x, y, RETICLE_RING_RADIUS).stroke({ color: RETICLE_COLOR, width: RETICLE_THICKNESS });
+  for (const [dx, dy] of [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ] as const) {
+    g.moveTo(x + dx * RETICLE_GAP, y + dy * RETICLE_GAP)
+      .lineTo(x + dx * (RETICLE_GAP + RETICLE_TICK), y + dy * (RETICLE_GAP + RETICLE_TICK))
+      .stroke({ color: RETICLE_COLOR, width: RETICLE_THICKNESS });
+  }
+}
+
 export interface Renderer {
   canvas: HTMLCanvasElement;
   /** À appeler juste avant chaque tick de simulation, pour l'interpolation. */
@@ -297,6 +320,28 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
 
   const minimapGraphics = new Graphics();
   app.stage.addChild(minimapGraphics);
+
+  // Réticule : par-dessus tout, suit la souris en espace écran. Le curseur OS
+  // est masqué sur le canvas pour ne pas doubler le crosshair.
+  const reticleGraphics = new Graphics();
+  app.stage.addChild(reticleGraphics);
+  // Pixi réécrit `canvas.style.cursor` à chaque pointermove via son système
+  // d'événements ; masquer le curseur OS passe donc par son style par défaut,
+  // pas seulement par le style inline.
+  app.renderer.events.cursorStyles.default = 'none';
+  app.canvas.style.cursor = 'none';
+  let reticleScreen: Vec2 | null = null;
+  const onReticleMove = (event: PointerEvent): void => {
+    const rect = app.canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? app.screen.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? app.screen.height / rect.height : 1;
+    reticleScreen = { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY };
+  };
+  const onReticleLeave = (): void => {
+    reticleScreen = null;
+  };
+  app.canvas.addEventListener('pointermove', onReticleMove);
+  app.canvas.addEventListener('pointerleave', onReticleLeave);
 
   let prevPlayerPos: Vec2 = { ...state.player.pos };
 
@@ -661,6 +706,9 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
           .circle(projectile.pos.x, projectile.pos.y, PROJECTILE_RADIUS)
           .fill(COLOR_PROJECTILE);
       }
+
+      if (reticleScreen) drawReticle(reticleGraphics, reticleScreen.x, reticleScreen.y);
+      else reticleGraphics.clear();
     },
 
     screenToWorld(screen: Vec2): Vec2 {
@@ -676,6 +724,8 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
     },
 
     dispose(): void {
+      app.canvas.removeEventListener('pointermove', onReticleMove);
+      app.canvas.removeEventListener('pointerleave', onReticleLeave);
       app.destroy(true);
     },
   };
