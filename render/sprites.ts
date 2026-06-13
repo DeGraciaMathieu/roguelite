@@ -38,7 +38,7 @@ export const SPRITE_FRAME_SIZE = 128;
  * silhouette n'est pas circulaire : ajusté 1:1 sur la hitbox il paraît trop
  * petit. On grossit le visuel seul — le rayon de collision ne change pas.
  */
-export const SPRITE_VISUAL_SCALE = 2.2;
+export const SPRITE_VISUAL_SCALE = 2.6;
 
 /** Les sprites orientés regardent vers le haut (−y) ; le facing domaine vaut 0 vers +x. */
 export const SPRITE_ROTATION_OFFSET = Math.PI / 2;

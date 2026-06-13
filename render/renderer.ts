@@ -71,7 +71,7 @@ const COLOR_ENEMY: Record<EnemyKind, number> = {
 };
 
 /** Côté monde des icônes de loot (les PNG font 32 px). */
-const LOOT_DRAW_SIZE = 18;
+const LOOT_DRAW_SIZE = 22;
 
 const DOOR_DRAW_WIDTH = 64;
 /** Au-delà du double de côté, un obstacle est une étagère/cloison, pas une caisse. */
@@ -689,7 +689,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
           Math.max(0, 1 - (equipped.reloadingUntilMs - renderState.elapsedMs) / reloadMs),
         );
         const barX = x - RELOAD_BAR_WIDTH / 2;
-        const barY = y - player.radius - RELOAD_BAR_OFFSET;
+        const barY = y - player.radius * SPRITE_VISUAL_SCALE - RELOAD_BAR_OFFSET;
         playerGraphics
           .rect(barX, barY, RELOAD_BAR_WIDTH, RELOAD_BAR_HEIGHT)
           .fill(COLOR_RELOAD_BAR_BG);
