@@ -25,6 +25,8 @@ export interface WeaponDef {
   pellets: number;
   /** Dispersion en radians (0 = précis). */
   spread: number;
+  /** Vitesse des projectiles en px/s ; croisée au TTL global, détermine la portée. */
+  projectileSpeed: number;
 }
 
 /** Instance possédée pendant la run, avec son état mutable. */

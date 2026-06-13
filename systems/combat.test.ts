@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { asId } from '@/domain';
-import type { Enemy, RunState, WeaponInstance } from '@/domain';
+import type { Enemy, RunState, WeaponDefId, WeaponInstance } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
 import { createDebugRun } from '@/data/debugRoom';
 import { START_AMMO } from '@/data/balance';
-import { RIFLE_ID, createWeaponInstance, getWeaponDef } from '@/data/weapons';
+import { RIFLE_ID, SHOTGUN_ID, createWeaponInstance, getWeaponDef } from '@/data/weapons';
 import { updateCombat, updateProjectiles } from './combat';
 import { spawnRoomContent } from './spawn';
 
@@ -310,5 +310,51 @@ describe('updateProjectiles', () => {
 
     updateProjectiles(state, projectile.ttlMs + 1);
     expect(state.projectiles).toHaveLength(0);
+  });
+});
+
+describe('vitesse de projectile par arme', () => {
+  function equipAndFire(id: WeaponDefId): RunState {
+    const state = createDebugRun(1);
+    state.inventory.weapons.push(createWeaponInstance(id));
+    state.inventory.equippedIndex = state.inventory.weapons.length - 1;
+    updateCombat(state, intent({ fire: true }));
+    return state;
+  }
+
+  it('la magnitude du vel d’un tir égale la vitesse de l’arme', () => {
+    for (const id of [RIFLE_ID, SHOTGUN_ID]) {
+      const def = getWeaponDef(id);
+      const state = equipAndFire(id);
+      expect(state.projectiles.length).toBeGreaterThan(0);
+      for (const projectile of state.projectiles) {
+        expect(Math.hypot(projectile.vel.x, projectile.vel.y)).toBeCloseTo(def.projectileSpeed);
+      }
+    }
+  });
+
+  it('à TTL fixe, un projectile lent expire sur une distance plus courte qu’un rapide', () => {
+    function rangeAtExpiry(id: WeaponDefId): number {
+      const state = createDebugRun(1);
+      const room = state.floor.rooms[state.floor.currentRoomId];
+      if (!room) throw new Error('Salle de debug manquante');
+      // Salle large et dégagée : le projectile expire par TTL avant d'atteindre un mur.
+      room.bounds = { x: 0, y: 0, w: 5000, h: 600 };
+      room.obstacles = [];
+      state.inventory.weapons.push(createWeaponInstance(id));
+      state.inventory.equippedIndex = state.inventory.weapons.length - 1;
+      updateCombat(state, intent({ fire: true }));
+      const first = state.projectiles[0];
+      if (!first) throw new Error('Projectile manquant');
+      const start = { x: first.pos.x, y: first.pos.y };
+      let last = start;
+      while (state.projectiles[0]) {
+        last = { x: state.projectiles[0].pos.x, y: state.projectiles[0].pos.y };
+        updateProjectiles(state, 1000 / 60);
+      }
+      return Math.hypot(last.x - start.x, last.y - start.y);
+    }
+
+    expect(rangeAtExpiry(SHOTGUN_ID)).toBeLessThan(rangeAtExpiry(RIFLE_ID));
   });
 });
