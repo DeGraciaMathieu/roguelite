@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { WALL_THICKNESS } from '@/data/balance';
-import { circleIntersectsRect, moveCircle, pointInRect, wallRects } from './collision';
+import {
+  circleIntersectsRect,
+  moveCircle,
+  pointInRect,
+  segmentIntersectsCircle,
+  wallRects,
+} from './collision';
 
 const RECT = { x: 100, y: 100, w: 50, h: 50 };
 
@@ -50,6 +56,45 @@ describe('moveCircle', () => {
     const wallBottom = { x: 0, y: 100, w: 200, h: 20 };
     const next = moveCircle({ x: 85, y: 85 }, 12, { x: 20, y: 20 }, [wallRight, wallBottom]);
     expect(next).toEqual({ x: 85, y: 85 });
+  });
+});
+
+describe('segmentIntersectsCircle', () => {
+  const C = { x: 100, y: 0 };
+
+  it('touche : renvoie le t d’entrée le long du segment', () => {
+    // Segment horizontal y=0 vers un cercle de rayon 10 centré en (100, 0) :
+    // entrée à x=90, soit t = 90/200 = 0.45.
+    const t = segmentIntersectsCircle({ x: 0, y: 0 }, { x: 200, y: 0 }, C, 10);
+    expect(t).toBeCloseTo(0.45);
+  });
+
+  it('rate : le segment passe à côté du cercle', () => {
+    // Décalé de 20 px en y : hors du rayon 10.
+    expect(segmentIntersectsCircle({ x: 0, y: 20 }, { x: 200, y: 20 }, C, 10)).toBeNull();
+  });
+
+  it('tangent : effleure le bord, compté comme touche (inclusif)', () => {
+    // y=10 frôle le cercle de rayon 10 : contact unique à x=100, t=0.5.
+    const t = segmentIntersectsCircle({ x: 0, y: 10 }, { x: 200, y: 10 }, C, 10);
+    expect(t).toBeCloseTo(0.5);
+  });
+
+  it('a déjà dans le cercle : contact immédiat à t=0', () => {
+    expect(segmentIntersectsCircle({ x: 100, y: 0 }, { x: 200, y: 0 }, C, 10)).toBe(0);
+  });
+
+  it('contact au-delà du segment : pas de touche', () => {
+    // Le cercle est en (100,0) mais le segment s'arrête à x=50.
+    expect(segmentIntersectsCircle({ x: 0, y: 0 }, { x: 50, y: 0 }, C, 10)).toBeNull();
+  });
+
+  it('ordre par t : le cercle le plus proche du départ donne le plus petit t', () => {
+    const near = segmentIntersectsCircle({ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 50, y: 0 }, 10);
+    const far = segmentIntersectsCircle({ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 150, y: 0 }, 10);
+    expect(near).not.toBeNull();
+    expect(far).not.toBeNull();
+    expect(near as number).toBeLessThan(far as number);
   });
 });
 

@@ -63,6 +63,43 @@ export function segmentIntersectsRect(a: Vec2, b: Vec2, rect: Rect): boolean {
 }
 
 /**
+ * Premier contact du segment [a, b] avec le cercle (center, radius). Renvoie le
+ * t ∈ [0, 1] du point d'entrée le long du segment, ou null si le segment ne
+ * s'approche jamais à `radius` du centre. Si a est déjà dans le cercle, renvoie 0.
+ *
+ * Borne inclusive (distance <= radius) pour rester cohérent avec le test ponctuel
+ * d'impact ennemi (dx²+dy² <= r²) : un contact tangent compte comme une touche.
+ * Sert à la collision balayée des projectiles, où le t départage plusieurs
+ * contacts le long d'un même tick.
+ */
+export function segmentIntersectsCircle(
+  a: Vec2,
+  b: Vec2,
+  center: Vec2,
+  radius: number,
+): number | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const fx = a.x - center.x;
+  const fy = a.y - center.y;
+
+  // a déjà dans le cercle : contact immédiat au début du segment.
+  if (fx * fx + fy * fy <= radius * radius) return 0;
+
+  // |f + t·d|² = r² → A t² + B t + C = 0.
+  const A = dx * dx + dy * dy;
+  if (A < 1e-12) return null; // segment dégénéré : a hors du cercle (déjà testé).
+  const B = 2 * (fx * dx + fy * dy);
+  const C = fx * fx + fy * fy - radius * radius;
+  const disc = B * B - 4 * A * C;
+  if (disc < 0) return null;
+
+  const t = (-B - Math.sqrt(disc)) / (2 * A);
+  if (t < 0 || t > 1) return null;
+  return t;
+}
+
+/**
  * Déplace un cercle en résolvant chaque axe séparément : si l'axe X mène dans
  * un solide, seul X est annulé — l'entité glisse le long des parois au lieu
  * de s'arrêter net sur un contact diagonal.

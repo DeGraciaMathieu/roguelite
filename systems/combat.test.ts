@@ -258,6 +258,31 @@ describe('updateProjectiles', () => {
     expect(state.floor.rooms[state.floor.currentRoomId]?.cleared).toBe(true);
   });
 
+  it('deux ennemis alignés : seul le plus proche du tireur encaisse', () => {
+    const state = createDebugRun(1);
+    const room = state.floor.rooms[state.floor.currentRoomId];
+    if (!room) throw new Error('Salle de debug manquante');
+    room.spawned = false;
+    // Visée par défaut vers la droite : deux raptors dans l'axe, l'un devant l'autre.
+    room.enemySpawns = [
+      { kind: 'raptor', at: { x: 480, y: 300 } },
+      { kind: 'raptor', at: { x: 560, y: 300 } },
+    ];
+    spawnRoomContent(state, room);
+    const near = Object.values(state.enemies).find((e) => e.pos.x === 480);
+    const far = Object.values(state.enemies).find((e) => e.pos.x === 560);
+    if (!near || !far) throw new Error('Ennemis non spawnés');
+    const nearStart = near.health.current;
+    const farStart = far.health.current;
+
+    updateCombat(state, intent({ fire: true }));
+    for (let i = 0; i < 20; i += 1) updateProjectiles(state, 1000 / 60);
+
+    expect(near.health.current).toBe(nearStart - getWeaponDef(equipped(state).defId).damage);
+    expect(far.health.current).toBe(farStart);
+    expect(state.projectiles).toHaveLength(0);
+  });
+
   it('un projectile traverse une fosse sans s’y arrêter', () => {
     const state = createDebugRun(1);
     const room = state.floor.rooms[state.floor.currentRoomId];

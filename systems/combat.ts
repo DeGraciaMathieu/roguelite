@@ -9,7 +9,7 @@ import type { Enemy, Room, RunState, Vec2, WeaponDef, WeaponInstance } from '@/d
 import type { PlayerIntent } from '@/input/intent';
 import { PROJECTILE_SPEED, PROJECTILE_TTL_MS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
-import { pointInRect, wallRects } from './collision';
+import { pointInRect, segmentIntersectsCircle, segmentIntersectsRect, wallRects } from './collision';
 import { currentRoom } from './movement';
 import { damageMultiplier, reloadDurationMultiplier } from './relics';
 import { allocEntityId } from './spawn';
@@ -91,13 +91,23 @@ export function updateCombat(state: RunState, intent: PlayerIntent): void {
   }
 }
 
-function enemyAt(state: RunState, point: Vec2): Enemy | null {
+/**
+ * Premier ennemi rencontré sur le segment [from, to], avec le t de son point de
+ * contact. Sur deux ennemis alignés, le plus petit t — donc le plus proche du
+ * tireur — gagne.
+ */
+function firstEnemyOnSegment(
+  state: RunState,
+  from: Vec2,
+  to: Vec2,
+): { enemy: Enemy; t: number } | null {
+  let best: { enemy: Enemy; t: number } | null = null;
   for (const enemy of Object.values(state.enemies)) {
-    const dx = point.x - enemy.pos.x;
-    const dy = point.y - enemy.pos.y;
-    if (dx * dx + dy * dy <= enemy.radius * enemy.radius) return enemy;
+    const t = segmentIntersectsCircle(from, to, enemy.pos, enemy.radius);
+    if (t === null) continue;
+    if (best === null || t < best.t) best = { enemy, t };
   }
-  return null;
+  return best;
 }
 
 function applyDamageToEnemy(state: RunState, room: Room, enemy: Enemy, damage: number): void {
@@ -117,19 +127,35 @@ export function updateProjectiles(state: RunState, dtMs: number): void {
   state.projectiles = state.projectiles.filter((projectile) => {
     projectile.ttlMs -= dtMs;
     if (projectile.ttlMs <= 0) return false;
-    projectile.pos.x += projectile.vel.x * dtSec;
-    projectile.pos.y += projectile.vel.y * dtSec;
-    // Test ponctuel par tick : ~12 px parcourus par tick face à des solides
-    // d'au moins 16 px d'épaisseur, le tunneling est impossible.
-    if (solids.some((solid) => pointInRect(projectile.pos, solid))) return false;
 
-    if (projectile.ownerId === 'player') {
-      const hit = enemyAt(state, projectile.pos);
-      if (hit) {
-        applyDamageToEnemy(state, room, hit, projectile.damage);
-        return false;
-      }
+    // Collision balayée sur le segment parcouru ce tick : on cherche le premier
+    // contact le long de [prev → next] plutôt que de tester le seul point final.
+    // Indépendant de la vitesse, donc à l'abri du tunneling à haute vélocité.
+    const prev = { x: projectile.pos.x, y: projectile.pos.y };
+    const next = {
+      x: prev.x + projectile.vel.x * dtSec,
+      y: prev.y + projectile.vel.y * dtSec,
+    };
+
+    const enemyHit =
+      projectile.ownerId === 'player' ? firstEnemyOnSegment(state, prev, next) : null;
+
+    if (enemyHit) {
+      // Un mur ou un obstacle interposé entre le tireur et l'ennemi absorbe le
+      // tir avant qu'il n'atteigne la cible : on borne le test au sous-segment.
+      const contact = {
+        x: prev.x + (next.x - prev.x) * enemyHit.t,
+        y: prev.y + (next.y - prev.y) * enemyHit.t,
+      };
+      if (solids.some((solid) => segmentIntersectsRect(prev, contact, solid))) return false;
+      applyDamageToEnemy(state, room, enemyHit.enemy, projectile.damage);
+      return false;
     }
+
+    if (solids.some((solid) => segmentIntersectsRect(prev, next, solid))) return false;
+
+    projectile.pos.x = next.x;
+    projectile.pos.y = next.y;
     return true;
   });
 }
