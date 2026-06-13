@@ -47,8 +47,8 @@ export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
     fireRateMs: 700,
     pellets: 1,
     spread: 0,
-    // Balle tendue et rapide : balaie la salle, portée ~1500 px.
-    projectileSpeed: 1000,
+    // Balle tendue et rapide : balaie la salle, portée ~1800 px.
+    projectileSpeed: 1200,
   },
 };
 
