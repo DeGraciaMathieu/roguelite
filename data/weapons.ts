@@ -20,6 +20,7 @@ export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
     fireRateMs: 250,
     pellets: 1,
     spread: 0.03,
+    projectileSpeed: 700,
   },
   [SHOTGUN_ID]: {
     id: SHOTGUN_ID,
@@ -31,6 +32,8 @@ export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
     fireRateMs: 900,
     pellets: 6,
     spread: 0.35,
+    // Plombs lents : arme de contact, portée ~720 px (< largeur de salle).
+    projectileSpeed: 480,
   },
   /** Précis et fort à distance ; cadence et chargeur faibles en contrepartie.
    * 28 dégâts : one-shot un compy, 2 balles un raptor, 5 un théropode. */
@@ -44,6 +47,8 @@ export const WEAPON_DEFS: Record<WeaponDefId, WeaponDef> = {
     fireRateMs: 700,
     pellets: 1,
     spread: 0,
+    // Balle tendue et rapide : balaie la salle, portée ~1500 px.
+    projectileSpeed: 1000,
   },
 };
 

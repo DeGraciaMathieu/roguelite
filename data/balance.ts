@@ -22,9 +22,6 @@ export const START_AMMO: Record<AmmoType, number> = { handgun: 24, shotgun: 12, 
 /** Épaisseur des murs pleins entourant une salle. */
 export const WALL_THICKNESS = 16;
 
-/** Vitesse des projectiles, en pixels monde par seconde. */
-export const PROJECTILE_SPEED = 700;
-
 /** Durée de vie max d'un projectile avant disparition. */
 export const PROJECTILE_TTL_MS = 1500;
 

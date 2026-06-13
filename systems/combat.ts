@@ -7,7 +7,7 @@
 import { isDead, nextFloat } from '@/domain';
 import type { Enemy, Room, RunState, Vec2, WeaponDef, WeaponInstance } from '@/domain';
 import type { PlayerIntent } from '@/input/intent';
-import { PROJECTILE_SPEED, PROJECTILE_TTL_MS } from '@/data/balance';
+import { PROJECTILE_TTL_MS } from '@/data/balance';
 import { getWeaponDef } from '@/data/weapons';
 import { pointInRect, segmentIntersectsCircle, segmentIntersectsRect, wallRects } from './collision';
 import { currentRoom } from './movement';
@@ -34,7 +34,7 @@ function spawnProjectiles(state: RunState, def: WeaponDef): void {
     state.projectiles.push({
       id: allocEntityId(state),
       pos: { x: player.pos.x + dirX * muzzle, y: player.pos.y + dirY * muzzle },
-      vel: { x: dirX * PROJECTILE_SPEED, y: dirY * PROJECTILE_SPEED },
+      vel: { x: dirX * def.projectileSpeed, y: dirY * def.projectileSpeed },
       damage,
       ammo: def.ammo,
       ownerId: 'player',
