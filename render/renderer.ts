@@ -33,6 +33,7 @@ import {
   spawnEffect,
   spawnDeathRing,
   spawnImpactSparks,
+  spawnPickup,
   tickEffects,
 } from './effects';
 import { drawMinimap } from './minimap';
@@ -72,6 +73,23 @@ const COLOR_ENEMY: Record<EnemyKind, number> = {
 
 /** Côté monde des icônes de loot (les PNG font 32 px). */
 const LOOT_DRAW_SIZE = 22;
+
+/** Teinte de l'anneau de ramassage selon le type d'objet pris (renforce ce qu'on récupère). */
+function lootColor(spawn: LootSpawn): number {
+  switch (spawn.kind) {
+    case 'ammo':
+    case 'key':
+    case 'weapon':
+      return 0xf0c33c; // doré
+    case 'consumable':
+      return 0x6fcf6f; // vert (medkit / bandage)
+    case 'relic':
+      return 0xb060e0; // violet
+  }
+}
+
+/** Rayon initial de l'anneau de ramassage, calé sur la taille de l'icône au sol. */
+const PICKUP_RING_RADIUS = LOOT_DRAW_SIZE * 0.7;
 
 const DOOR_DRAW_WIDTH = 64;
 /** Au-delà du double de côté, un obstacle est une étagère/cloison, pas une caisse. */
@@ -363,9 +381,16 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
     y: number;
     seen: boolean;
   }
+  interface LootSnap {
+    x: number;
+    y: number;
+    color: number;
+    seen: boolean;
+  }
   const effectPool = createEffectPool();
   const enemySnaps = new Map<string, EnemySnap>();
   const projectileSnaps = new Map<string, ProjectileSnap>();
+  const lootSnaps = new Map<LootSpawn, LootSnap>();
   const enemyFlashUntil = new Map<string, number>();
   let prevPlayerHealth = state.player.health.current;
   let prevWeaponKey = '';
@@ -380,6 +405,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   function resetFeedback(renderState: RunState): void {
     enemySnaps.clear();
     projectileSnaps.clear();
+    lootSnaps.clear();
     enemyFlashUntil.clear();
     for (const effect of effectPool) effect.active = false;
     prevPlayerHealth = renderState.player.health.current;
@@ -441,6 +467,29 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
           spawnImpactSparks(effectPool, snap.x, snap.y, COLOR_PROJECTILE);
         }
         projectileSnaps.delete(id);
+      } else {
+        snap.seen = false;
+      }
+    }
+
+    // Loot : une position présente la frame d'avant, absente maintenant =
+    // ramassage → anneau d'absorption teinté. Même mécanique seen/non-seen que
+    // les snaps ci-dessus ; le garde inRoomBounds écarte le renouvellement de
+    // liste au changement de salle (positions hors de la salle courante).
+    for (const spawn of room.lootSpawns) {
+      const snap = lootSnaps.get(spawn);
+      if (snap) {
+        snap.seen = true;
+      } else {
+        lootSnaps.set(spawn, { x: spawn.at.x, y: spawn.at.y, color: lootColor(spawn), seen: true });
+      }
+    }
+    for (const [spawn, snap] of lootSnaps) {
+      if (!snap.seen) {
+        if (inRoomBounds(room, snap.x, snap.y)) {
+          spawnPickup(effectPool, snap.x, snap.y, PICKUP_RING_RADIUS, snap.color);
+        }
+        lootSnaps.delete(spawn);
       } else {
         snap.seen = false;
       }
@@ -508,6 +557,17 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
         effectsGraphics
           .circle(effect.x, effect.y, effect.radius * (1 + progress))
           .stroke({ width: 2, color: effect.color, alpha: fade * 0.8 });
+      } else if (effect.kind === 'pickup') {
+        // Inverse de l'anneau de mort : il se contracte vers le point, et trois
+        // étincelles convergent avec lui — lecture « objet aspiré ».
+        const dist = effect.radius * fade;
+        effectsGraphics.circle(effect.x, effect.y, dist).stroke({ width: 2, color: effect.color, alpha: fade });
+        for (let k = 0; k < 3; k += 1) {
+          const a = (k / 3) * Math.PI * 2;
+          effectsGraphics
+            .circle(effect.x + Math.cos(a) * dist, effect.y + Math.sin(a) * dist, 1.5)
+            .fill({ color: effect.color, alpha: fade });
+        }
       } else {
         effectsGraphics.circle(effect.x, effect.y, effect.radius).fill({ color: effect.color, alpha: fade * 0.3 });
       }

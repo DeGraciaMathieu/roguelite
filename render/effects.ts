@@ -9,7 +9,7 @@
 /** Interrupteur global du feedback de combat (debug/perf). */
 export const EFFECTS_ENABLED = true;
 
-export type EffectKind = 'spark' | 'deathRing' | 'dashGhost';
+export type EffectKind = 'spark' | 'deathRing' | 'dashGhost' | 'pickup';
 
 export interface Effect {
   active: boolean;
@@ -29,6 +29,7 @@ export interface Effect {
 export const SPARK_DURATION_MS = 160;
 export const DEATH_RING_DURATION_MS = 150;
 export const DASH_GHOST_DURATION_MS = 150;
+export const PICKUP_DURATION_MS = 180;
 export const ENEMY_FLASH_MS = 80;
 export const PLAYER_DAMAGE_FLASH_MS = 180;
 
@@ -86,6 +87,11 @@ export function spawnDeathRing(pool: Effect[], x: number, y: number, radius: num
 
 export function spawnDashGhost(pool: Effect[], x: number, y: number, radius: number, color: number): void {
   spawnEffect(pool, { kind: 'dashGhost', x, y, vx: 0, vy: 0, radius, color, durationMs: DASH_GHOST_DURATION_MS });
+}
+
+/** Anneau d'absorption au point de ramassage : se contracte vers le centre (cf. drawEffects). */
+export function spawnPickup(pool: Effect[], x: number, y: number, radius: number, color: number): void {
+  spawnEffect(pool, { kind: 'pickup', x, y, vx: 0, vy: 0, radius, color, durationMs: PICKUP_DURATION_MS });
 }
 
 /** Vieillit, déplace (étincelles) et désactive les effets expirés. */

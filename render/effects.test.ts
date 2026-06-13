@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEATH_RING_DURATION_MS,
+  PICKUP_DURATION_MS,
   SPARK_DURATION_MS,
   createEffectPool,
   effectProgress,
   spawnDeathRing,
   spawnEffect,
   spawnImpactSparks,
+  spawnPickup,
   tickEffects,
 } from './effects';
 
@@ -63,6 +65,28 @@ describe('pool d’effets', () => {
       expect(spark.ageMs).toBe(100);
       expect(spark.durationMs).toBe(SPARK_DURATION_MS);
     }
+  });
+
+  it('spawnPickup active un anneau qui expire à sa durée', () => {
+    const pool = createEffectPool();
+    spawnPickup(pool, 30, 40, 16, 0x6fcf6f);
+
+    const active = pool.filter((effect) => effect.active);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({ kind: 'pickup', x: 30, y: 40, radius: 16, ageMs: 0 });
+
+    tickEffects(pool, PICKUP_DURATION_MS - 1);
+    expect(pool.filter((effect) => effect.active)).toHaveLength(1);
+    tickEffects(pool, 1);
+    expect(pool.filter((effect) => effect.active)).toHaveLength(0);
+  });
+
+  it('pool plein : un pickup excédentaire est sauté sans erreur', () => {
+    const pool = createEffectPool();
+    for (let n = 0; n < pool.length; n += 1) spawnDeathRing(pool, n, 0, 4, 0);
+    spawnPickup(pool, 0, 0, 16, 0x6fcf6f);
+    expect(pool.filter((effect) => effect.active)).toHaveLength(pool.length);
+    expect(pool.some((effect) => effect.kind === 'pickup')).toBe(false);
   });
 
   it('effectProgress va de 0 à 1, borné', () => {
