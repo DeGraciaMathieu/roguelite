@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarize, toCsv } from './report';
+import { formatSummaries, summarize, toCsv } from './report';
 import type { RunRecord } from './telemetry';
 
 function record(overrides: Partial<RunRecord>): RunRecord {
@@ -74,5 +74,34 @@ describe('toCsv', () => {
     expect(lines[1]).toContain('1,cautious,extracted');
     expect(lines[1]).toContain(',,'); // deathFloor vide
     expect(lines[2]).toContain(',3,'); // deathFloor renseigné
+  });
+});
+
+describe('formatSummaries', () => {
+  it('rend une section par politique avec issues, moyennes et wipe/étage', () => {
+    const records = [
+      record({ seed: 1 }),
+      record({ seed: 2, status: 'dead', deathFloor: 1, deepestFloor: 1 }),
+      record({ seed: 3, status: 'tick-cap' }),
+      record({ seed: 1, policy: 'aggressive', deepestFloor: 3, kills: 20 }),
+    ];
+
+    const text = formatSummaries(summarize(records));
+
+    // Une section par politique.
+    expect(text).toContain('=== cautious — 3 runs ===');
+    expect(text).toContain('=== aggressive — 1 runs ===');
+    // Issues : 1 extraction sur 3 = 33,3 %.
+    expect(text).toContain('extraction 33.3% (1)');
+    expect(text).toContain('morts 1');
+    expect(text).toContain('tick-cap 1');
+    // Les rubriques attendues sont présentes.
+    expect(text).toContain('munitions');
+    expect(text).toContain('soins');
+    expect(text).toContain('wipe/étage');
+  });
+
+  it('rend une chaîne vide sans résumé', () => {
+    expect(formatSummaries([])).toBe('');
   });
 });
