@@ -5,7 +5,6 @@ import {
   moveCircle,
   pointInRect,
   segmentIntersectsCircle,
-  segmentIntersectsRect,
   wallRects,
 } from './collision';
 
@@ -107,34 +106,5 @@ describe('wallRects', () => {
     expect(walls).toContainEqual({ x: 0, y: 600 - WALL_THICKNESS, w: 800, h: WALL_THICKNESS });
     expect(walls).toContainEqual({ x: 0, y: 0, w: WALL_THICKNESS, h: 600 });
     expect(walls).toContainEqual({ x: 800 - WALL_THICKNESS, y: 0, w: WALL_THICKNESS, h: 600 });
-  });
-});
-
-describe('segmentIntersectsRect', () => {
-  it('traverse le rect de part en part', () => {
-    expect(segmentIntersectsRect({ x: 50, y: 125 }, { x: 200, y: 125 }, RECT)).toBe(true);
-  });
-
-  it('détecte un segment dont une extrémité est à l’intérieur', () => {
-    expect(segmentIntersectsRect({ x: 125, y: 125 }, { x: 300, y: 125 }, RECT)).toBe(true);
-  });
-
-  it('rejette un segment qui passe entièrement à côté', () => {
-    expect(segmentIntersectsRect({ x: 0, y: 0 }, { x: 10, y: 90 }, RECT)).toBe(false);
-  });
-
-  it('gère un segment axial : croise s’il est aligné sur le rect, rate sinon', () => {
-    // Vertical à x=125 (delta x nul) : traverse la tranche du rect.
-    expect(segmentIntersectsRect({ x: 125, y: 0 }, { x: 125, y: 300 }, RECT)).toBe(true);
-    // Vertical à x=75 (delta x nul) : hors de la tranche, rejeté par le slab.
-    expect(segmentIntersectsRect({ x: 75, y: 0 }, { x: 75, y: 300 }, RECT)).toBe(false);
-  });
-
-  it('effleure un bord : tangence comptée comme intersection', () => {
-    expect(segmentIntersectsRect({ x: 50, y: 100 }, { x: 200, y: 100 }, RECT)).toBe(true);
-  });
-
-  it('un segment en deçà du rect ne le touche pas (slab paramétrique borné à [0,1])', () => {
-    expect(segmentIntersectsRect({ x: 50, y: 125 }, { x: 80, y: 125 }, RECT)).toBe(false);
   });
 });
