@@ -4,7 +4,7 @@
  * Pur et déterministe à partir d'une seed.
  */
 
-import type { DoorId, ItemDefId, Rect, RoomId, Vec2 } from './core';
+import type { DecalKind, DoorId, ItemDefId, Rect, RoomId, Vec2 } from './core';
 import type { EnemyKind } from './entities';
 import type { RelicDefId } from './core';
 
@@ -21,6 +21,17 @@ export type RoomKind =
 export interface EnemySpawn {
   kind: EnemyKind;
   at: Vec2;
+}
+
+/** Élément purement décoratif d'une salle. Aucune incidence gameplay. */
+export interface Decal {
+  kind: DecalKind;
+  /** Centre, en coordonnées monde. */
+  at: Vec2;
+  /** Rotation de rendu (radians) — variété visuelle. */
+  rotation: number;
+  /** Facteur d'échelle appliqué aux dimensions de base — variété visuelle. */
+  scale: number;
 }
 
 export type LootSpawn =
@@ -40,6 +51,8 @@ export interface Room {
   /** Zones de vide : infranchissables au sol, mais les tirs et la vue passent. */
   pits: Rect[];
   doorIds: DoorId[];
+  /** Décor purement visuel, généré de façon déterministe. Jamais lu par les systèmes. */
+  decals: Decal[];
   /** Spawns matérialisés à la première visite (spawn paresseux). */
   enemySpawns: EnemySpawn[];
   lootSpawns: LootSpawn[];

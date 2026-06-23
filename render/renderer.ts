@@ -8,6 +8,7 @@
 import { Application, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { healthState } from '@/domain';
 import type {
+  Decal,
   Door,
   EnemyKind,
   EntityId,
@@ -19,6 +20,7 @@ import type {
   Vec2,
 } from '@/domain';
 import { PROJECTILE_RADIUS, WALL_THICKNESS } from '@/data/balance';
+import { DECAL_DEFS } from '@/data/decals';
 import { BANDAGE_ID } from '@/data/consumables';
 import { getWeaponDef } from '@/data/weapons';
 import { reloadDurationMultiplier } from '@/systems/relics';
@@ -225,15 +227,35 @@ function addDoor(layer: Container, textures: GameTextures, door: Door, room: Roo
   layer.addChild(sprite);
 }
 
-/** (Re)construit la couche statique d'une salle : tuiles, props, portes, zones. */
+/** Décal purement décoratif : sprite ancré au centre, dimensionné par son Def. */
+function addDecal(layer: Container, textures: GameTextures, decal: Decal): void {
+  const def = DECAL_DEFS[decal.kind];
+  const sprite = new Sprite(textures.decals[decal.kind]);
+  sprite.anchor.set(0.5);
+  sprite.position.set(decal.at.x, decal.at.y);
+  sprite.width = def.w * decal.scale;
+  sprite.height = def.h * decal.scale;
+  sprite.rotation = decal.rotation;
+  // Halo additif pour les sources lumineuses.
+  if (def.blend === 'add') sprite.blendMode = 'add';
+  layer.addChild(sprite);
+}
+
+/**
+ * (Re)construit la couche statique d'une salle : tuiles, décor de sol, props,
+ * portes, zones. Le décor suspendu/mural va dans `overheadLayer`, dessiné
+ * au-dessus des entités mais sous le voile de fog.
+ */
 function buildRoom(
   layer: Container,
+  overheadLayer: Container,
   textures: GameTextures,
   room: Room,
   doors: readonly Door[],
   canExtract: boolean,
 ): void {
   for (const child of layer.removeChildren()) child.destroy();
+  for (const child of overheadLayer.removeChildren()) child.destroy();
   const { x, y, w, h } = room.bounds;
   addTiling(layer, textures.tiles.wall, room.bounds);
   addTiling(layer, textures.tiles.floor, {
@@ -242,12 +264,19 @@ function buildRoom(
     w: w - 2 * WALL_THICKNESS,
     h: h - 2 * WALL_THICKNESS,
   });
+  // Décor de sol sous les props : taches et débris affleurent le sol.
+  for (const decal of room.decals) {
+    if (DECAL_DEFS[decal.kind].layer === 'floor') addDecal(layer, textures, decal);
+  }
   for (const obstacle of room.obstacles) addObstacle(layer, textures, obstacle);
   for (const pit of room.pits) addTiling(layer, textures.tiles.pit, pit);
   for (const door of doors) addDoor(layer, textures, door, room);
   if (room.kind === 'exit') {
     addStretched(layer, textures.zones.stairs, stairZone(room));
     if (canExtract) addStretched(layer, textures.zones.extraction, extractionZone(room));
+  }
+  for (const decal of room.decals) {
+    if (DECAL_DEFS[decal.kind].layer === 'overhead') addDecal(overheadLayer, textures, decal);
   }
 }
 
@@ -286,7 +315,9 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   world.position.set(-viewRoom.bounds.x, -viewRoom.bounds.y);
 
   const roomLayer = new Container();
-  buildRoom(roomLayer, textures, viewRoom, roomDoors(state, viewRoom), extractionAvailable(state.floor));
+  // Décor suspendu/mural : au-dessus des entités, sous le voile (créé plus bas).
+  const decalOverheadLayer = new Container();
+  buildRoom(roomLayer, decalOverheadLayer, textures, viewRoom, roomDoors(state, viewRoom), extractionAvailable(state.floor));
   world.addChild(roomLayer);
 
   // Loot en sprites : reconstruit quand la salle ou le nombre d'objets change
@@ -308,6 +339,10 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
   // Effets éphémères : au-dessus des ennemis, sous le joueur et ses tirs.
   const effectsGraphics = new Graphics();
   world.addChild(effectsGraphics);
+
+  // Décor suspendu/mural : au-dessus des entités, mais sous le voile pour rester
+  // masqué par le brouillard comme le reste du décor.
+  world.addChild(decalOverheadLayer);
 
   // Vision limitée : voile au-dessus du décor et des entités mais sous les
   // projectiles et le joueur (on tire dans le noir). La zone vue est un
@@ -617,7 +652,7 @@ export async function createRenderer(state: RunState): Promise<Renderer> {
       if (room.id !== viewRoom.id) {
         viewRoom = room;
         world.position.set(-room.bounds.x, -room.bounds.y);
-        buildRoom(roomLayer, textures, room, roomDoors(renderState, room), extractionAvailable(renderState.floor));
+        buildRoom(roomLayer, decalOverheadLayer, textures, room, roomDoors(renderState, room), extractionAvailable(renderState.floor));
         // Changement de salle = téléportation : on n'interpole pas par-dessus.
         prevPlayerPos = { ...renderState.player.pos };
       }

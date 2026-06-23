@@ -22,6 +22,7 @@ function createDebugRoom(): Room {
     ],
     pits: [],
     doorIds: [],
+    decals: [],
     enemySpawns: [],
     lootSpawns: [],
     spawned: true,

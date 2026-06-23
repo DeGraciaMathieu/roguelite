@@ -62,6 +62,13 @@ export interface FloorGenConfig {
   pitsPerCombatRoom: { min: number; max: number };
   /** Porte verrouillée : au plus une par étage, repli « aucune » sur les graphes sans pont. */
   lockedDoor: { minFloor: number; chance: number };
+  /** Décor purement visuel par salle (bornes incluses, RNG décor indépendant). */
+  decals: {
+    /** Décalques sol, débris, végétation. */
+    floorPerRoom: { min: number; max: number };
+    /** Suspendus / muraux et éclairages, ancrés le long des murs. */
+    overheadPerRoom: { min: number; max: number };
+  };
 }
 
 export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
@@ -99,4 +106,8 @@ export const DEFAULT_FLOOR_GEN: FloorGenConfig = {
   medkitsPerRestRoom: 1,
   pitsPerCombatRoom: { min: 0, max: 2 },
   lockedDoor: { minFloor: 1, chance: 0.6 },
+  decals: {
+    floorPerRoom: { min: 4, max: 7 },
+    overheadPerRoom: { min: 2, max: 3 },
+  },
 };

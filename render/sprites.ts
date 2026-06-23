@@ -8,7 +8,8 @@
  */
 
 import { Assets, Rectangle, Texture } from 'pixi.js';
-import type { AmmoType, EnemyKind } from '@/domain';
+import type { AmmoType, DecalKind, EnemyKind } from '@/domain';
+import { DECAL_DEFS } from '@/data/decals';
 import spritesheetUrl from '../assets/spritesheet_td_128.png';
 import playerHandgunUrl from '../assets/player_handgun_td_64.png';
 import playerShotgunUrl from '../assets/player_shotgun_td_64.png';
@@ -30,6 +31,23 @@ import medkitUrl from '../assets/medkit_32.png';
 import bandageUrl from '../assets/bandage_32.png';
 import keyUrl from '../assets/key_32.png';
 import relicUrl from '../assets/relic_32.png';
+
+/**
+ * Décals : 26 PNG rangés par famille dans assets/decals_pack/decals/. Importés
+ * par glob (résolu en URL) pour éviter 26 imports manuels et toute faute de
+ * frappe ; la clé d'accès est le nom de fichier sans extension (= DecalKind).
+ */
+const decalUrlByPath = import.meta.glob('../assets/decals_pack/decals/**/*.png', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+function decalUrl(kind: DecalKind): string {
+  const entry = Object.entries(decalUrlByPath).find(([path]) => path.endsWith(`/${kind}.png`));
+  if (!entry) throw new Error(`Texture de décal introuvable : ${kind}`);
+  return entry[1];
+}
 
 export const SPRITE_FRAME_SIZE = 128;
 
@@ -64,6 +82,7 @@ export interface GameTextures {
     key: Texture;
     relic: Texture;
   };
+  decals: Record<DecalKind, Texture>;
 }
 
 export async function loadGameTextures(): Promise<GameTextures> {
@@ -119,6 +138,13 @@ export async function loadGameTextures(): Promise<GameTextures> {
       frame: new Rectangle(index * SPRITE_FRAME_SIZE, 0, SPRITE_FRAME_SIZE, SPRITE_FRAME_SIZE),
     });
 
+  const decalKinds = Object.keys(DECAL_DEFS) as DecalKind[];
+  const decalTextures = await Promise.all(decalKinds.map((kind) => Assets.load<Texture>(decalUrl(kind))));
+  const decals = {} as Record<DecalKind, Texture>;
+  decalKinds.forEach((kind, i) => {
+    decals[kind] = decalTextures[i]!;
+  });
+
   return {
     enemies: {
       raptor: slice(ENEMY_FRAME_BY_KIND.raptor),
@@ -138,5 +164,6 @@ export async function loadGameTextures(): Promise<GameTextures> {
       key,
       relic,
     },
+    decals,
   };
 }

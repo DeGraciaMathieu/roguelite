@@ -24,6 +24,43 @@ export function asId<B extends string>(raw: string): Brand<string, B> {
   return raw as Brand<string, B>;
 }
 
+// --- Décor -------------------------------------------------------------------
+// Éléments purement visuels d'une salle (cf. data/decals.ts pour le catalogue).
+// Aucune incidence gameplay : ni collision, ni vue, ni IA.
+
+export type DecalKind =
+  // Décalques de sol
+  | 'bloodStain'
+  | 'bloodTrail'
+  | 'clawMarks'
+  | 'concreteCrack'
+  | 'drainGrate'
+  | 'hazardStripes'
+  | 'oilSpill'
+  | 'scorchMark'
+  // Débris au sol
+  | 'brokenCrate'
+  | 'brokenPallet'
+  | 'bulletCasings'
+  | 'rubble'
+  | 'scatteredPapers'
+  | 'shatteredGlass'
+  // Végétation envahissante
+  | 'crackWeeds'
+  | 'ivy'
+  | 'moss'
+  | 'roots'
+  // Suspendus / muraux
+  | 'hangingCable'
+  | 'pipeRun'
+  | 'ventDuct'
+  | 'wallStain'
+  // Éclairages d'ambiance
+  | 'alarmLight'
+  | 'doorGlow'
+  | 'emergencyLamp'
+  | 'neonLight';
+
 // --- Géométrie ---------------------------------------------------------------
 
 export interface Vec2 {

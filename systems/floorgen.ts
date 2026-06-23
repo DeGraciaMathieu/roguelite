@@ -7,6 +7,7 @@
 
 import { asId, createRng, nextFloat, nextInt, pick } from '@/domain';
 import type {
+  Decal,
   Door,
   DoorId,
   EnemySpawn,
@@ -26,6 +27,7 @@ import { RELIC_DEFS } from '@/data/relics';
 import { circleIntersectsRect } from './collision';
 import { DEFAULT_FLOOR_GEN } from '@/data/floorgen';
 import type { FloorGenConfig } from '@/data/floorgen';
+import { FLOOR_DECAL_KINDS, OVERHEAD_DECAL_KINDS } from '@/data/decals';
 
 interface Cell {
   cx: number;
@@ -528,6 +530,86 @@ function generateRoomLoot(
   return spawns;
 }
 
+/**
+ * Seed décor dérivée de la seed d'étage. Flux RNG **indépendant** du contenu
+ * (ennemis / loot / géométrie) : ajouter ou retirer du décor ne décale jamais
+ * le placement gameplay d'une seed donnée.
+ */
+export function deriveDecalSeed(floorSeed: number, roomIndex: number): number {
+  return (floorSeed ^ ((roomIndex + 1) * 0x85ebca6b)) >>> 0;
+}
+
+/** Demi-côté du carré gardé libre autour de chaque porte (décor décoratif). */
+const DECAL_DOOR_CLEARANCE = 56;
+/** Distance entre un décal mural et le mur intérieur. */
+const WALL_DECAL_INSET = WALL_THICKNESS + 20;
+
+/** Point contre un mur, évitant les portes — ancrage du décor suspendu/mural. */
+function randomWallDecalPoint(rng: RngState, bounds: Rect, doorRects: readonly Rect[]): Vec2 {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const along = (lo: number, hi: number): number => nextInt(rng, lo, hi);
+    const side = nextInt(rng, 0, 3);
+    let point: Vec2;
+    if (side === 0) {
+      point = { x: along(bounds.x + INNER_MARGIN, bounds.x + bounds.w - INNER_MARGIN), y: bounds.y + WALL_DECAL_INSET };
+    } else if (side === 1) {
+      point = { x: along(bounds.x + INNER_MARGIN, bounds.x + bounds.w - INNER_MARGIN), y: bounds.y + bounds.h - WALL_DECAL_INSET };
+    } else if (side === 2) {
+      point = { x: bounds.x + WALL_DECAL_INSET, y: along(bounds.y + INNER_MARGIN, bounds.y + bounds.h - INNER_MARGIN) };
+    } else {
+      point = { x: bounds.x + bounds.w - WALL_DECAL_INSET, y: along(bounds.y + INNER_MARGIN, bounds.y + bounds.h - INNER_MARGIN) };
+    }
+    if (!doorRects.some((rect) => circleIntersectsRect(point, DECAL_DOOR_CLEARANCE, rect))) return point;
+  }
+  return { x: bounds.x + bounds.w / 2, y: bounds.y + WALL_DECAL_INSET };
+}
+
+/**
+ * Décor purement visuel d'une salle. RNG **indépendant** du contenu : à passer
+ * via `deriveDecalSeed`. Le sol évite obstacles, fosses et portes ; les éléments
+ * muraux/suspendus s'ancrent contre les murs. Aucune incidence gameplay.
+ */
+export function generateDecals(
+  rng: RngState,
+  bounds: Rect,
+  blocked: readonly Rect[],
+  doorPoints: readonly Vec2[],
+  config: FloorGenConfig = DEFAULT_FLOOR_GEN,
+): Decal[] {
+  const decals: Decal[] = [];
+  const doorRects: Rect[] = doorPoints.map((p) => ({
+    x: p.x - DECAL_DOOR_CLEARANCE,
+    y: p.y - DECAL_DOOR_CLEARANCE,
+    w: 2 * DECAL_DOOR_CLEARANCE,
+    h: 2 * DECAL_DOOR_CLEARANCE,
+  }));
+
+  // Décor au sol : évite obstacles, fosses et portes ; rotation et échelle libres.
+  const floorBlocked = [...blocked, ...doorRects];
+  const floorCount = nextInt(rng, config.decals.floorPerRoom.min, config.decals.floorPerRoom.max);
+  for (let n = 0; n < floorCount; n += 1) {
+    decals.push({
+      kind: pick(rng, FLOOR_DECAL_KINDS),
+      at: randomClearPoint(rng, bounds, floorBlocked),
+      rotation: nextFloat(rng) * Math.PI * 2,
+      scale: 0.8 + nextFloat(rng) * 0.5,
+    });
+  }
+
+  // Décor mural/suspendu : ancré le long des murs, sans rotation (orientation lisible).
+  const overheadCount = nextInt(rng, config.decals.overheadPerRoom.min, config.decals.overheadPerRoom.max);
+  for (let n = 0; n < overheadCount; n += 1) {
+    decals.push({
+      kind: pick(rng, OVERHEAD_DECAL_KINDS),
+      at: randomWallDecalPoint(rng, bounds, doorRects),
+      rotation: 0,
+      scale: 0.9 + nextFloat(rng) * 0.3,
+    });
+  }
+
+  return decals;
+}
+
 export function generateFloor(
   seed: number,
   index = 0,
@@ -610,6 +692,8 @@ export function generateFloor(
       obstacles,
       pits,
       doorIds,
+      // RNG décor dérivé et indépendant : n'affecte pas le placement gameplay.
+      decals: generateDecals(createRng(deriveDecalSeed(seed, i)), bounds, blocked, doorPoints, config),
       enemySpawns,
       lootSpawns: generateRoomLoot(rng, kind, bounds, config, blocked),
       spawned: false,

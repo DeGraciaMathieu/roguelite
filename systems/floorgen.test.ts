@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { EnemyKind, Floor, RoomId } from '@/domain';
+import { createRng } from '@/domain';
+import type { EnemyKind, Floor, Rect, RoomId, Vec2 } from '@/domain';
 import { DEFAULT_FLOOR_GEN } from '@/data/floorgen';
+import { DECAL_DEFS } from '@/data/decals';
 import { circleIntersectsRect } from './collision';
-import { generateFloor } from './floorgen';
+import { deriveDecalSeed, generateDecals, generateFloor } from './floorgen';
 
 const SEEDS = [1, 42, 1337, 0xdeadbeef];
 
@@ -409,6 +411,49 @@ describe('generateFloor — invariants structurels', () => {
         expect(spawn.y).toBeLessThan(b.y + b.h);
       }
       expect(room.spawned).toBe(false);
+    }
+  });
+});
+
+describe('generateDecals — décor déterministe et borné', () => {
+  const bounds: Rect = { x: 0, y: 0, w: 800, h: 600 };
+  const obstacles: Rect[] = [{ x: 300, y: 240, w: 120, h: 120 }];
+  const doorPoints: Vec2[] = [
+    { x: 400, y: 0 },
+    { x: 800, y: 300 },
+  ];
+
+  it.each(SEEDS)('seed %i : même seed -> même décor', (seed) => {
+    const a = generateDecals(createRng(deriveDecalSeed(seed, 0)), bounds, obstacles, doorPoints);
+    const b = generateDecals(createRng(deriveDecalSeed(seed, 0)), bounds, obstacles, doorPoints);
+    expect(a).toEqual(b);
+  });
+
+  it.each(SEEDS)('seed %i : nombre de décals par couche dans les bornes de config', (seed) => {
+    const decals = generateDecals(createRng(deriveDecalSeed(seed, 0)), bounds, obstacles, doorPoints);
+    const floor = decals.filter((d) => DECAL_DEFS[d.kind].layer === 'floor').length;
+    const overhead = decals.filter((d) => DECAL_DEFS[d.kind].layer === 'overhead').length;
+    const cfg = DEFAULT_FLOOR_GEN.decals;
+    expect(floor).toBeGreaterThanOrEqual(cfg.floorPerRoom.min);
+    expect(floor).toBeLessThanOrEqual(cfg.floorPerRoom.max);
+    expect(overhead).toBeGreaterThanOrEqual(cfg.overheadPerRoom.min);
+    expect(overhead).toBeLessThanOrEqual(cfg.overheadPerRoom.max);
+  });
+
+  it.each(SEEDS)('seed %i : tout le décor reste dans la salle', (seed) => {
+    const decals = generateDecals(createRng(deriveDecalSeed(seed, 0)), bounds, obstacles, doorPoints);
+    for (const d of decals) {
+      expect(d.at.x).toBeGreaterThanOrEqual(bounds.x);
+      expect(d.at.x).toBeLessThanOrEqual(bounds.x + bounds.w);
+      expect(d.at.y).toBeGreaterThanOrEqual(bounds.y);
+      expect(d.at.y).toBeLessThanOrEqual(bounds.y + bounds.h);
+    }
+  });
+
+  it.each(SEEDS)('seed %i : chaque salle générée reçoit du décor', (seed) => {
+    const floor = generateFloor(seed, 0);
+    for (const room of Object.values<Floor['rooms'][RoomId]>(floor.rooms)) {
+      expect(room.decals.length).toBeGreaterThan(0);
     }
   });
 });

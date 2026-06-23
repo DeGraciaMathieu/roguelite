@@ -1,0 +1,184 @@
+{
+  "bloodStain": {
+    "category": "decals",
+    "file": "decals/decals/bloodStain.png",
+    "w": 48,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "bloodTrail": {
+    "category": "decals",
+    "file": "decals/decals/bloodTrail.png",
+    "w": 80,
+    "h": 24,
+    "blendMode": "normal"
+  },
+  "clawMarks": {
+    "category": "decals",
+    "file": "decals/decals/clawMarks.png",
+    "w": 40,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "concreteCrack": {
+    "category": "decals",
+    "file": "decals/decals/concreteCrack.png",
+    "w": 64,
+    "h": 16,
+    "blendMode": "normal"
+  },
+  "drainGrate": {
+    "category": "decals",
+    "file": "decals/decals/drainGrate.png",
+    "w": 32,
+    "h": 32,
+    "blendMode": "normal"
+  },
+  "hazardStripes": {
+    "category": "decals",
+    "file": "decals/decals/hazardStripes.png",
+    "w": 96,
+    "h": 24,
+    "blendMode": "normal"
+  },
+  "oilSpill": {
+    "category": "decals",
+    "file": "decals/decals/oilSpill.png",
+    "w": 56,
+    "h": 48,
+    "blendMode": "normal"
+  },
+  "scorchMark": {
+    "category": "decals",
+    "file": "decals/decals/scorchMark.png",
+    "w": 44,
+    "h": 44,
+    "blendMode": "normal"
+  },
+  "brokenCrate": {
+    "category": "debris",
+    "file": "decals/debris/brokenCrate.png",
+    "w": 44,
+    "h": 44,
+    "blendMode": "normal"
+  },
+  "brokenPallet": {
+    "category": "debris",
+    "file": "decals/debris/brokenPallet.png",
+    "w": 60,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "bulletCasings": {
+    "category": "debris",
+    "file": "decals/debris/bulletCasings.png",
+    "w": 28,
+    "h": 28,
+    "blendMode": "normal"
+  },
+  "rubble": {
+    "category": "debris",
+    "file": "decals/debris/rubble.png",
+    "w": 52,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "scatteredPapers": {
+    "category": "debris",
+    "file": "decals/debris/scatteredPapers.png",
+    "w": 40,
+    "h": 32,
+    "blendMode": "normal"
+  },
+  "shatteredGlass": {
+    "category": "debris",
+    "file": "decals/debris/shatteredGlass.png",
+    "w": 36,
+    "h": 36,
+    "blendMode": "normal"
+  },
+  "hangingCable": {
+    "category": "overhead",
+    "file": "decals/overhead/hangingCable.png",
+    "w": 16,
+    "h": 72,
+    "blendMode": "normal"
+  },
+  "pipeRun": {
+    "category": "overhead",
+    "file": "decals/overhead/pipeRun.png",
+    "w": 120,
+    "h": 20,
+    "blendMode": "normal"
+  },
+  "ventDuct": {
+    "category": "overhead",
+    "file": "decals/overhead/ventDuct.png",
+    "w": 64,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "wallStain": {
+    "category": "overhead",
+    "file": "decals/overhead/wallStain.png",
+    "w": 48,
+    "h": 64,
+    "blendMode": "normal"
+  },
+  "alarmLight": {
+    "category": "lightSource",
+    "file": "decals/lightSource/alarmLight.png",
+    "w": 24,
+    "h": 24,
+    "blendMode": "add"
+  },
+  "doorGlow": {
+    "category": "lightSource",
+    "file": "decals/lightSource/doorGlow.png",
+    "w": 48,
+    "h": 24,
+    "blendMode": "add"
+  },
+  "emergencyLamp": {
+    "category": "lightSource",
+    "file": "decals/lightSource/emergencyLamp.png",
+    "w": 20,
+    "h": 28,
+    "blendMode": "add"
+  },
+  "neonLight": {
+    "category": "lightSource",
+    "file": "decals/lightSource/neonLight.png",
+    "w": 72,
+    "h": 12,
+    "blendMode": "add"
+  },
+  "crackWeeds": {
+    "category": "overgrowth",
+    "file": "decals/overgrowth/crackWeeds.png",
+    "w": 36,
+    "h": 28,
+    "blendMode": "normal"
+  },
+  "ivy": {
+    "category": "overgrowth",
+    "file": "decals/overgrowth/ivy.png",
+    "w": 32,
+    "h": 80,
+    "blendMode": "normal"
+  },
+  "moss": {
+    "category": "overgrowth",
+    "file": "decals/overgrowth/moss.png",
+    "w": 40,
+    "h": 40,
+    "blendMode": "normal"
+  },
+  "roots": {
+    "category": "overgrowth",
+    "file": "decals/overgrowth/roots.png",
+    "w": 64,
+    "h": 56,
+    "blendMode": "normal"
+  }
+}
